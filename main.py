@@ -7,125 +7,125 @@ import base64
 
 # ================= CONFIGURATION =================
 SHEET_ID = "1Geh6DEbnkdDAgTQx_G4wu4cEjchO5EPwLcNCheSICNY"
-FONT_PATH = "THSARABUN BOLD.ttf" # ชื่อไฟล์ฟอนต์ต้องตรงกันเป๊ะๆ
+FONT_NAME = "THSarabunBold"
+FONT_FILE = "THSARABUN BOLD.ttf"  # ชื่อไฟล์ต้องตรงกับที่อัปโหลดขึ้น GitHub
 # =================================================
 
-# --- การเชื่อมต่อ Google Sheets ---
+# --- 1. การเชื่อมต่อ Google Sheets ---
 def init_connection():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-    client = gspread.authorize(creds)
-    return client
-
-# --- ฟังก์ชันดึงข้อมูลจากแผ่นงาน ---
-def get_data_from_sheet(sheet_name):
     try:
-        client = init_connection()
-        sh = client.open_by_key(SHEET_ID)
-        worksheet = sh.worksheet(sheet_name)
-        data = worksheet.get_all_records()
-        return pd.DataFrame(data)
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
+        client = gspread.authorize(creds)
+        return client
     except Exception as e:
-        st.error(f"เกิดข้อผิดพลาดในการดึงข้อมูลจาก {sheet_name}: {e}")
-        return pd.DataFrame()
+        st.error(f"การเชื่อมต่อฐานข้อมูลผิดพลาด: {e}")
+        return None
 
-# --- ฟังก์ชันสร้าง PDF รองรับภาษาไทย ---
-def export_to_pdf(df, user_id):
-    # ใช้ fpdf2 (จะเรียกใช้งานเหมือน fpdf ปกติแต่รองรับ Unicode)
+# --- 2. ฟังก์ชันดึงข้อมูลจากแผ่นงาน ---
+def get_data(sheet_name):
+    client = init_connection()
+    if client:
+        try:
+            sh = client.open_by_key(SHEET_ID)
+            worksheet = sh.worksheet(sheet_name)
+            return pd.DataFrame(worksheet.get_all_records())
+        except Exception as e:
+            st.error(f"ไม่พบแผ่นงานชื่อ '{sheet_name}': {e}")
+            return pd.DataFrame()
+    return pd.DataFrame()
+
+# --- 3. ฟังก์ชันสร้าง PDF (รองรับภาษาไทย) ---
+def create_pdf(df, user_id):
     pdf = FPDF()
     pdf.add_page()
     
-    # 1. ลงทะเบียนและใช้ฟอนต์ไทย
+    # ลงทะเบียนฟอนต์ไทย
     try:
-        pdf.add_font('THSarabun', '', FONT_PATH, uni=True)
-        pdf.set_font('THSarabun', '', 18)
+        pdf.add_font(FONT_NAME, '', FONT_FILE)
+        pdf.set_font(FONT_NAME, '', 20)
     except:
-        st.warning("ไม่พบไฟล์ฟอนต์ THSARABUN BOLD.ttf ระบบจะใช้ฟอนต์มาตรฐานแทน (ภาษาไทยอาจไม่แสดงผล)")
-        pdf.set_font("Arial", 'B', 16)
+        pdf.set_font("Arial", 'B', 16) # Fallback กรณีหาไฟล์ฟอนต์ไม่เจอ
 
-    # หัวข้อรายงาน
-    pdf.cell(0, 15, f"รายงานข้อมูลผู้ใช้งาน: {user_id}", ln=True, align='C')
+    # ส่วนหัว
+    pdf.cell(0, 15, f"รายงานข้อมูลสำหรับคุณ: {user_id}", ln=True, align='C')
     pdf.ln(5)
     
-    # ส่วนของเนื้อหาตาราง
-    pdf.set_font('THSarabun', '', 12)
-    
-    # วนลูปคอลัมน์
-    cols = list(df.columns)
-    for col in cols:
+    # ตารางข้อมูล
+    pdf.set_font(FONT_NAME, '', 14)
+    # เขียนหัวตาราง
+    for col in df.columns:
         pdf.cell(40, 10, str(col), border=1, align='C')
     pdf.ln()
     
-    # วนลูปข้อมูลในแถว
-    for index, row in df.iterrows():
+    # เขียนข้อมูลแต่ละแถว
+    for _, row in df.iterrows():
         for item in row:
             pdf.cell(40, 10, str(item), border=1)
         pdf.ln()
         
-    # ส่งค่าออกเป็น bytes
-    return pdf.output() 
+    return pdf.output()
 
-# --- ระบบจัดการ Login ---
+# --- 4. ระบบ Login และการจัดการ Session ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
-if 'user_id' not in st.session_state:
-    st.session_state.user_id = ""
 
 if not st.session_state.logged_in:
     st.title("🔐 เข้าสู่ระบบ")
-    with st.form("login_form"):
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        submit = st.form_submit_button("Login")
-        
-        if submit:
-            users_df = get_data_from_sheet("users")
+    with st.form("login"):
+        u = st.text_input("Username")
+        p = st.text_input("Password", type="password")
+        if st.form_submit_button("Login"):
+            users_df = get_data("users")
             if not users_df.empty:
-                auth = users_df[(users_df['username'].astype(str) == str(username)) & 
-                                (users_df['password'].astype(str) == str(password))]
-                if not auth.empty:
+                # ตรวจสอบความถูกต้อง
+                match = users_df[(users_df['username'].astype(str) == u) & 
+                                 (users_df['password'].astype(str) == p)]
+                if not match.empty:
                     st.session_state.logged_in = True
-                    st.session_state.user_id = username
+                    st.session_state.user_id = u
                     st.rerun()
                 else:
-                    st.error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
+                    st.error("Username หรือ Password ไม่ถูกต้อง")
 
+# --- 5. หน้าแอปพลิเคชันหลัก ---
 else:
-    # --- หน้าจอหลัก ---
-    st.sidebar.header(f"👤 ผู้ใช้งาน: {st.session_state.user_id}")
-    menu = st.sidebar.radio("เลือกเมนู", ["Data", "Data1 (PDF)", "Data2", "Data3"])
+    st.sidebar.title(f"สวัสดี, {st.session_state.user_id}")
+    choice = st.sidebar.radio("เมนูหลัก", ["หน้าหลัก (Data)", "รายงาน (Data1)", "ข้อมูล Data2", "ข้อมูล Data3"])
     
-    if st.sidebar.button("Log out"):
+    if st.sidebar.button("ออกจากระบบ"):
         st.session_state.logged_in = False
         st.rerun()
 
-    def show_filtered_data(sheet_name, enable_pdf=False):
-        st.header(f"📄 แผ่นงาน: {sheet_name}")
-        df = get_data_from_sheet(sheet_name)
+    # ฟังก์ชันแสดงผลและกรองข้อมูล
+    def display_content(sheet_name, can_export=False):
+        st.header(f"📊 ข้อมูลแผ่นงาน {sheet_name}")
+        df = get_data(sheet_name)
         
-        if not df.empty:
-            if 'user' in df.columns:
-                filtered_df = df[df['user'].astype(str) == str(st.session_state.user_id)]
+        if not df.empty and 'user' in df.columns:
+            # กรองข้อมูลเฉพาะของ User ที่ล็อกอิน
+            filtered = df[df['user'].astype(str) == st.session_state.user_id]
+            
+            if not filtered.empty:
+                st.dataframe(filtered, use_container_width=True)
                 
-                if not filtered_df.empty:
-                    st.table(filtered_df) # ใช้ st.table เพื่อให้ดูง่ายบนเว็บ
-                    
-                    if enable_pdf:
-                        if st.button("📥 ดาวน์โหลด PDF"):
-                            pdf_output = export_to_pdf(filtered_df, st.session_state.user_id)
-                            # สร้าง Link สำหรับดาวน์โหลด
-                            b64 = base64.b64encode(pdf_output).decode()
-                            href = f'<a href="data:application/pdf;base64,{b64}" download="report_{st.session_state.user_id}.pdf" style="padding:10px; background-color:#F63366; color:white; border-radius:5px; text-decoration:none;">Download PDF File</a>'
-                            st.markdown(href, unsafe_allow_html=True)
-                else:
-                    st.info("ไม่พบข้อมูลของคุณในส่วนนี้")
+                if can_export:
+                    if st.button("📥 ส่งออกเป็น PDF"):
+                        pdf_bytes = create_pdf(filtered, st.session_state.user_id)
+                        b64 = base64.b64encode(pdf_bytes).decode()
+                        href = f'<a href="data:application/pdf;base64,{b64}" download="report_{sheet_name}.pdf" style="text-decoration:none; background-color:#F63366; color:white; padding:10px 20px; border-radius:5px;">คลิกเพื่อดาวน์โหลด PDF</a>'
+                        st.markdown(href, unsafe_allow_html=True)
             else:
-                st.error("ไม่พบคอลัมน์ 'user' เพื่อใช้ในการกรองข้อมูล")
+                st.info("ไม่พบข้อมูลของคุณในระบบ")
         else:
-            st.info("ไม่มีข้อมูล")
+            st.warning("ไม่มีข้อมูล หรือไม่พบคอลัมน์ 'user'")
 
-    # แยกการแสดงผลตามเมนู
-    if menu == "Data": show_filtered_data("data")
-    elif menu == "Data1 (PDF)": show_filtered_data("data1", enable_pdf=True)
-    elif menu == "Data2": show_filtered_data("data2")
-    elif menu == "Data3": show_filtered_data("data3")
+    # ส่วนการแสดงหน้าตามเมนู
+    if choice == "หน้าหลัก (Data)":
+        display_content("data")
+    elif choice == "รายงาน (Data1)":
+        display_content("data1", can_export=True)
+    elif choice == "ข้อมูล Data2":
+        display_content("data2")
+    elif choice == "ข้อมูล Data3":
+        display_content("data3")
