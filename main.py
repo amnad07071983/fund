@@ -65,7 +65,7 @@ if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
-    st.title("🔐 Login System")
+    st.title("🔐 ลงชื่อเข้าใช้ระบบ")
     with st.form("login_box"):
         u = st.text_input("Username")
         p = st.text_input("Password", type="password")
@@ -84,7 +84,7 @@ else:
     st.sidebar.success(f"User: {st.session_state.user_id}")
     menu = st.sidebar.radio("เมนู", ["Data", "Data1 (PDF)", "Data2", "Data3"])
     
-    if st.sidebar.button("Logout"):
+    if st.sidebar.button("ออกจากระบบ"):
         st.session_state.logged_in = False
         st.rerun()
 
