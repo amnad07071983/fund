@@ -105,6 +105,6 @@ else:
                 st.info("ไม่มีข้อมูลของคุณ")
 
     if menu == "ข้อมูลสรุป": show_page("data")
-    elif menu == "เงินออม" (PDF)": show_page("data1", True)
+    elif menu == "เงินออม": show_page("data1", True)
     elif menu == "เงินกู้ยืม": show_page("data2")
     elif menu == "หลักทรัพย์ค้ำประกัน": show_page("data3")
