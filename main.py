@@ -82,7 +82,7 @@ if not st.session_state.logged_in:
                     st.error("Username หรือ Password ไม่ถูกต้อง")
 else:
     st.sidebar.success(f"User: {st.session_state.user_id}")
-    menu = st.sidebar.radio("เมนู", ["Data", "Data1 (PDF)", "Data2", "Data3"])
+    menu = st.sidebar.radio("เมนู", ["ข้อมูลสรุป", "เงินออม", "เงินกู้ยืม", "หลักทรัพย์ค้ำประกัน"])
     
     if st.sidebar.button("ออกจากระบบ"):
         st.session_state.logged_in = False
