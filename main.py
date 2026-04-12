@@ -104,7 +104,7 @@ else:
             else:
                 st.info("ไม่มีข้อมูลของคุณ")
 
-    if menu == "Data": show_page("data1")
+    if menu == "Data1": show_page("data")
     elif menu == "Data1 (PDF)": show_page("data1", True)
     elif menu == "Data2": show_page("data2")
     elif menu == "Data3": show_page("data3")
