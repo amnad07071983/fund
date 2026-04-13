@@ -2,46 +2,24 @@ import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
-from fpdf import FPDF
 from io import BytesIO
+
+# ===== reportlab =====
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+# =====================
 
 # ================= CONFIGURATION =================
 SHEET_ID = "1Geh6DEbnkdDAgTQx_G4wu4cEjchO5EPwLcNCheSICNY"
 FONT_FILE = "THSARABUN BOLD.ttf" 
 WATERMARK_FILE = "p1.png"
 # =================================================
-
-
-# ====== เพิ่มคลาส PDF สำหรับลายน้ำ ======
-class PDF(FPDF):
-    def header(self):
-        try:
-            self.set_alpha(0.001)  # ปรับความจางตรงนี้
-            self.image(WATERMARK_FILE, x=30, y=60, w=150)
-            self.set_alpha(1)
-        except:
-            pass
-
-    def set_alpha(self, alpha, bm='Normal'):
-        self._out(f'/GS{int(alpha*100)} gs')
-
-    def _putextgstates(self):
-        self._out('/ExtGState <<')
-        for i in range(1, 101):
-            self._out(f'/GS{i} << /ca {i/100} /CA {i/100} >>')
-        self._out('>>')
-
-    def _putresources(self):
-        super()._putresources()
-        self._putextgstates()
-
-    def _putresourcedict(self):
-        super()._putresourcedict()
-        self._out('/ExtGState <<')
-        for i in range(1, 101):
-            self._out(f'/GS{i} {i} 0 R')
-        self._out('>>')
-# ========================================
 
 
 # เชื่อมต่อ Google Sheets
@@ -80,38 +58,90 @@ def get_data_from_sheet(sheet_name):
     return pd.DataFrame()
 
 
-# สร้างไฟล์ PDF (แก้ไขให้มีลายน้ำแล้ว)
+# ====== PDF (ตาราง + ลายน้ำ + statement) ======
 def create_pdf(df, sheet_name):
-    pdf = PDF()
-    pdf.add_page()
+    buffer = BytesIO()
 
+    # โหลดฟอนต์ไทย
     try:
-        pdf.add_font('THSarabun', '', FONT_FILE)
-        pdf.set_font('THSarabun', '', 16)
-    except Exception as e:
-        st.warning(f"โหลดฟอนต์ไทยไม่สำเร็จ: {e}")
-        pdf.set_font("Arial", size=12)
+        pdfmetrics.registerFont(TTFont('THSarabun', FONT_FILE))
+        font_name = 'THSarabun'
+    except:
+        font_name = 'Helvetica'
+
+    styles = getSampleStyleSheet()
+
+    # ลายน้ำ
+    def add_watermark(c: canvas.Canvas, doc):
+        try:
+            c.saveState()
+            c.setFillAlpha(0.05)  # 👈 ปรับความจางตรงนี้
+            width, height = A4
+
+            img_width = 140 * mm
+            img_height = 140 * mm
+            x = (width - img_width) / 2
+            y = (height - img_height) / 2
+
+            c.drawImage(WATERMARK_FILE, x, y,
+                        width=img_width,
+                        height=img_height,
+                        mask='auto')
+            c.restoreState()
+        except:
+            pass
+
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    elements = []
+
+    # Header รายงาน
+    elements.append(Paragraph("รายงานข้อมูลสมาชิก", styles["Title"]))
+    elements.append(Spacer(1, 10))
+    elements.append(Paragraph(f"ประเภทข้อมูล: {sheet_name}", styles["Normal"]))
+    elements.append(Spacer(1, 15))
 
     if not df.empty:
-        total_fields = len(df.columns)
-        frame_height = (total_fields * 10) + 10
-        pdf.rect(10, 10, 190, frame_height)
-        
-        pdf.set_y(15)
+        table_data = []
+
+        # header
+        table_data.append(list(df.columns))
+
+        # data
         for _, row in df.iterrows():
-            for col in df.columns:
-                pdf.set_x(15)
-                col_name = str(col)
-                val_data = str(row[col])
-                pdf.cell(60, 10, f"{col_name} : ", border=0)
-                pdf.cell(115, 10, val_data, border=0, align='L')
-                pdf.ln(10)
+            table_data.append([str(x) for x in row])
 
-    output = pdf.output()
-    return bytes(output) if isinstance(output, bytearray) else output
+        table = Table(table_data, repeatRows=1)
+
+        # style ตาราง
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#0B5394")),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, -1), font_name),
+            ('FONTSIZE', (0, 0), (-1, -1), 12),
+
+            ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
+
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+
+            ('BACKGROUND', (0, 1), (-1, -1), colors.whitesmoke),
+        ]))
+
+        # สลับสีแถว
+        for i in range(1, len(table_data)):
+            if i % 2 == 0:
+                table.setStyle([
+                    ('BACKGROUND', (0, i), (-1, i), colors.lightgrey)
+                ])
+
+        elements.append(table)
+
+    doc.build(elements, onFirstPage=add_watermark, onLaterPages=add_watermark)
+
+    return buffer.getvalue()
+# =================================================
 
 
-# สร้างไฟล์ Excel
+# สร้าง Excel
 def to_excel(df):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -119,7 +149,7 @@ def to_excel(df):
     return output.getvalue()
 
 
-# --- Main Logic ---
+# --- Main ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
@@ -165,16 +195,13 @@ else:
             if sheet_name == "data":
                 col1, col2 = st.columns(2)
                 with col1:
-                    try:
-                        pdf_data = create_pdf(filtered, sheet_name)
-                        st.download_button(
-                            label="📥 PDF Report",
-                            data=pdf_data,
-                            file_name=f"report_{st.session_state.user_id}.pdf",
-                            mime="application/pdf"
-                        )
-                    except Exception as e:
-                        st.error(f"ไม่สามารถสร้าง PDF ได้: {e}")
+                    pdf_data = create_pdf(filtered, sheet_name)
+                    st.download_button(
+                        label="📥 PDF Report",
+                        data=pdf_data,
+                        file_name=f"report_{st.session_state.user_id}.pdf",
+                        mime="application/pdf"
+                    )
                 with col2:
                     excel_data = to_excel(filtered)
                     st.download_button(
