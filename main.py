@@ -4,16 +4,15 @@ from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 from io import BytesIO
 
-# ===== reportlab =====
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib import colors
+# ===== เพิ่ม reportlab =====
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-# =====================
+# ==========================
 
 # ================= CONFIGURATION =================
 SHEET_ID = "1Geh6DEbnkdDAgTQx_G4wu4cEjchO5EPwLcNCheSICNY"
@@ -58,7 +57,7 @@ def get_data_from_sheet(sheet_name):
     return pd.DataFrame()
 
 
-# ====== PDF (ตาราง + ลายน้ำ + statement) ======
+# ====== สร้าง PDF (เปลี่ยนเป็น ReportLab + ลายน้ำโปร่งใส) ======
 def create_pdf(df, sheet_name):
     buffer = BytesIO()
 
@@ -69,17 +68,15 @@ def create_pdf(df, sheet_name):
     except:
         font_name = 'Helvetica'
 
-    styles = getSampleStyleSheet()
-
-    # ลายน้ำ
+    # ฟังก์ชันลายน้ำ
     def add_watermark(c: canvas.Canvas, doc):
         try:
             c.saveState()
             c.setFillAlpha(0.05)  # 👈 ปรับความจางตรงนี้
             width, height = A4
 
-            img_width = 140 * mm
-            img_height = 140 * mm
+            img_width = 120 * mm
+            img_height = 120 * mm
             x = (width - img_width) / 2
             y = (height - img_height) / 2
 
@@ -92,56 +89,23 @@ def create_pdf(df, sheet_name):
             pass
 
     doc = SimpleDocTemplate(buffer, pagesize=A4)
-    elements = []
-
-    # Header รายงาน
-    elements.append(Paragraph("รายงานข้อมูลสมาชิก", styles["Title"]))
-    elements.append(Spacer(1, 10))
-    elements.append(Paragraph(f"ประเภทข้อมูล: {sheet_name}", styles["Normal"]))
-    elements.append(Spacer(1, 15))
+    styles = getSampleStyleSheet()
+    story = []
 
     if not df.empty:
-        table_data = []
-
-        # header
-        table_data.append(list(df.columns))
-
-        # data
         for _, row in df.iterrows():
-            table_data.append([str(x) for x in row])
+            for col in df.columns:
+                text = f"{col} : {row[col]}"
+                story.append(Paragraph(text, styles["Normal"]))
+                story.append(Spacer(1, 8))
 
-        table = Table(table_data, repeatRows=1)
-
-        # style ตาราง
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#0B5394")),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, -1), font_name),
-            ('FONTSIZE', (0, 0), (-1, -1), 12),
-
-            ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
-
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-
-            ('BACKGROUND', (0, 1), (-1, -1), colors.whitesmoke),
-        ]))
-
-        # สลับสีแถว
-        for i in range(1, len(table_data)):
-            if i % 2 == 0:
-                table.setStyle([
-                    ('BACKGROUND', (0, i), (-1, i), colors.lightgrey)
-                ])
-
-        elements.append(table)
-
-    doc.build(elements, onFirstPage=add_watermark, onLaterPages=add_watermark)
+    doc.build(story, onFirstPage=add_watermark, onLaterPages=add_watermark)
 
     return buffer.getvalue()
-# =================================================
+# ===============================================================
 
 
-# สร้าง Excel
+# สร้างไฟล์ Excel
 def to_excel(df):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -149,7 +113,7 @@ def to_excel(df):
     return output.getvalue()
 
 
-# --- Main ---
+# --- Main Logic ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
@@ -195,13 +159,16 @@ else:
             if sheet_name == "data":
                 col1, col2 = st.columns(2)
                 with col1:
-                    pdf_data = create_pdf(filtered, sheet_name)
-                    st.download_button(
-                        label="📥 PDF Report",
-                        data=pdf_data,
-                        file_name=f"report_{st.session_state.user_id}.pdf",
-                        mime="application/pdf"
-                    )
+                    try:
+                        pdf_data = create_pdf(filtered, sheet_name)
+                        st.download_button(
+                            label="📥 PDF Report",
+                            data=pdf_data,
+                            file_name=f"report_{st.session_state.user_id}.pdf",
+                            mime="application/pdf"
+                        )
+                    except Exception as e:
+                        st.error(f"ไม่สามารถสร้าง PDF ได้: {e}")
                 with col2:
                     excel_data = to_excel(filtered)
                     st.download_button(
