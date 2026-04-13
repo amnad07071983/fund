@@ -37,7 +37,6 @@ def get_data(sheet_name):
             ]
             for col in target_cols:
                 if col in df.columns:
-                    # แปลงเป็น numeric ก่อนเพื่อความถูกต้อง แล้วฟอร์แมต string
                     df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
                     df[col] = df[col].apply(lambda x: "{:,.2f}".format(x))
             return df
@@ -51,31 +50,29 @@ def create_pdf(df, user_id, sheet_name):
     
     try:
         pdf.add_font('THSarabun', '', FONT_FILE, uni=True)
+        pdf.set_font('THSarabun', '', 14)
     except:
-        pass
+        pdf.set_font("Arial", size=12)
 
-    # --- ส่วนหัวรายงาน (บังคับพิมพ์ที่ตำแหน่งบนสุด) ---
-    pdf.set_y(15)
-    pdf.set_font('THSarabun', '', 20)
-    pdf.cell(0, 10, "บริษัท น้ำตาลกกกก จำกัด", ln=True, align='C')
-    pdf.set_font('THSarabun', '', 16)
-    pdf.cell(0, 10, "รายงานสรุปกองทุน", ln=True, align='C')
-    pdf.line(10, 35, 200, 35) # เส้นคั่นหัวกระดาษ
-    pdf.ln(10)
-
-    if not df.empty:
-        # รูปแบบสำหรับแผ่นงาน "data" (รายตั้ง)
-        if sheet_name == "data":
-            pdf.set_font('THSarabun', '', 14)
-            for _, row in df.iterrows():
-                for col in df.columns:
-                    pdf.set_font('THSarabun', '', 14)
-                    pdf.cell(60, 10, f"{col} :", border='B')
-                    pdf.cell(130, 10, str(row[col]), border='B', align='R') # ชิดขวาเพื่อความสวยงาม
-                    pdf.ln(12)
+    if not df.empty and sheet_name == "data":
+        # คำนวณความสูงทั้งหมดของข้อมูลเพื่อวาดกรอบ (ประมาณบรรทัดละ 10 หน่วย)
+        total_rows = len(df.columns)
+        frame_height = (total_rows * 10) + 10
+        
+        # วาดกรอบสี่เหลี่ยมขนาดใหญ่ (x, y, w, h)
+        # เริ่มที่ x=10, y=10 กว้าง 190 (เกือบเต็มหน้า)
+        pdf.rect(10, 10, 190, frame_height)
+        
+        pdf.set_y(15) # ขยับตำแหน่งเริ่มพิมพ์ให้อยู่ในกรอบ
+        for _, row in df.iterrows():
+            for col in df.columns:
+                pdf.set_x(15) # ขยับจากขอบซ้ายของกรอบเล็กน้อย
+                # พิมพ์ชื่อหัวข้อและข้อมูล (ไม่มีเส้น border ทีละช่อง)
+                pdf.cell(60, 10, f"{col} : ", border=0)
+                pdf.cell(115, 10, str(row[col]), border=0, align='L')
                 pdf.ln(10)
-    
-    # แก้ไขปัญหา a bytes-like object is required โดยการคืนค่า output โดยตรง
+            pdf.ln(10) # เว้นระยะหากมีข้อมูลหลายชุด
+            
     return pdf.output(dest='S').encode('latin-1')
 
 def to_excel(df):
@@ -121,7 +118,6 @@ else:
                 st.dataframe(filtered)
                 st.write("---")
                 
-                # แสดงปุ่มตามเงื่อนไข
                 if name == "data":
                     c1, c2 = st.columns(2)
                     with c1:
