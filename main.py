@@ -68,23 +68,32 @@ def create_pdf(df, sheet_name):
     except:
         font_name = 'Helvetica'
 
-    # ลายน้ำ (กึ่งกลาง)
+    # ===== ลายน้ำ + กรอบ =====
     def add_watermark(c: canvas.Canvas, doc):
         try:
             c.saveState()
             c.setFillAlpha(0.5)
 
             width, height = A4
+
+            # --- ลายน้ำ ---
             img_width = 140 * mm
             img_height = 140 * mm
-
             x = (width - img_width) / 2
-            y = (height - img_height) / 2   # 👈 กึ่งกลาง
+            y = (height - img_height) / 2
 
             c.drawImage(WATERMARK_FILE, x, y,
                         width=img_width,
                         height=img_height,
                         mask='auto')
+
+            # --- กรอบสีเทาเต็มหน้า ---
+            c.setStrokeColorRGB(0.6, 0.6, 0.6)
+            c.setLineWidth(1)
+
+            margin = 10
+            c.rect(margin, margin, width - 2*margin, height - 2*margin)
+
             c.restoreState()
         except:
             pass
