@@ -4,6 +4,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 from fpdf import FPDF
 import base64
+from io import BytesIO
 
 # ================= CONFIGURATION =================
 SHEET_ID = "1Geh6DEbnkdDAgTQx_G4wu4cEjchO5EPwLcNCheSICNY"
@@ -14,7 +15,6 @@ FONT_FILE = "THSARABUN BOLD.ttf"
 def init_connection():
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        # ดึงข้อมูลจาก Streamlit Secrets โดยตรง
         creds_info = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(dict(creds_info), scope)
         client = gspread.authorize(creds)
@@ -39,7 +39,7 @@ def create_pdf(df, user_id):
     pdf = FPDF()
     pdf.add_page()
     try:
-        pdf.add_font('THSarabun', '', FONT_FILE)
+        pdf.add_font('THSarabun', '', FONT_FILE, uni=True)
         pdf.set_font('THSarabun', '', 18)
     except:
         pdf.set_font("Arial", size=14)
@@ -49,16 +49,26 @@ def create_pdf(df, user_id):
     
     # วาดตาราง
     pdf.set_font('THSarabun', '', 12)
+    # คำนวณความกว้างคอลัมน์อัตโนมัติ
+    col_width = 190 / len(df.columns) if len(df.columns) > 0 else 38
+    
     for col in df.columns:
-        pdf.cell(38, 10, str(col), border=1, align='C')
+        pdf.cell(col_width, 10, str(col), border=1, align='C')
     pdf.ln()
     
     for _, row in df.iterrows():
         for item in row:
-            pdf.cell(38, 10, str(item), border=1)
+            pdf.cell(col_width, 10, str(item), border=1)
         pdf.ln()
         
-    return pdf.output()
+    return pdf.output(dest='S').encode('latin-1')
+
+# --- ฟังก์ชันแปลงข้อมูลเป็น Excel ---
+def to_excel(df):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Sheet1')
+    return output.getvalue()
 
 # --- ระบบ Session & UI ---
 if 'logged_in' not in st.session_state:
@@ -73,7 +83,7 @@ if not st.session_state.logged_in:
             users_df = get_data("users")
             if not users_df.empty:
                 auth = users_df[(users_df['username'].astype(str) == u) & 
-                                 (users_df['password'].astype(str) == p)]
+                                (users_df['password'].astype(str) == p)]
                 if not auth.empty:
                     st.session_state.logged_in = True
                     st.session_state.user_id = u
@@ -88,23 +98,41 @@ else:
         st.session_state.logged_in = False
         st.rerun()
 
-    def show_page(name, pdf_mode=False):
+    def show_page(name):
         st.subheader(f"📄 ข้อมูลจาก {name}")
         df = get_data(name)
         if not df.empty and 'user' in df.columns:
             filtered = df[df['user'].astype(str) == st.session_state.user_id]
             if not filtered.empty:
                 st.dataframe(filtered)
-                if pdf_mode:
-                    if st.button("Download PDF"):
+                
+                # ส่วนการ Export ข้อมูล
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # ปุ่มดาวน์โหลด PDF
+                    if st.button(f"Download PDF ({name})"):
                         pdf_bytes = create_pdf(filtered, st.session_state.user_id)
                         b64 = base64.b64encode(pdf_bytes).decode()
-                        href = f'<a href="data:application/pdf;base64,{b64}" download="report.pdf" style="background:#F63366;color:white;padding:10px;border-radius:5px;text-decoration:none;">Download File</a>'
+                        href = f'<a href="data:application/pdf;base64,{b64}" download="report_{name}.pdf" style="background:#F63366;color:white;padding:10px;border-radius:5px;text-decoration:none;display:inline-block;">คลิกเพื่อดาวน์โหลด PDF</a>'
                         st.markdown(href, unsafe_allow_html=True)
+
+                with col2:
+                    # ปุ่มดาวน์โหลด Excel
+                    excel_data = to_excel(filtered)
+                    st.download_button(
+                        label="Download Excel",
+                        data=excel_data,
+                        file_name=f"report_{name}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
             else:
                 st.info("ไม่มีข้อมูลของคุณ")
+        else:
+            st.warning("ไม่พบข้อมูลหรือโครงสร้างตารางไม่ถูกต้อง")
 
+    # เรียกใช้งานตามเมนู
     if menu == "ข้อมูลสรุป": show_page("data")
-    elif menu == "เงินออม": show_page("data1", True)
+    elif menu == "เงินออม": show_page("data1")
     elif menu == "เงินกู้ยืม": show_page("data2")
     elif menu == "หลักทรัพย์ค้ำประกัน": show_page("data3")
