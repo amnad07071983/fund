@@ -72,7 +72,7 @@ def create_pdf(df, sheet_name):
     def add_watermark(c: canvas.Canvas, doc):
         try:
             c.saveState()
-            c.setFillAlpha(0.5)
+            c.setFillAlpha(0.3)
 
             width, height = A4
 
@@ -154,7 +154,7 @@ if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
-    st.title("🔐 ระบบกองทุน (สมาชิก 1,000 คน)")
+    st.title("🔐 ระบบกองทุนเงินออมพนักงาน")
     with st.form("login_box"):
         u = st.text_input("Username")
         p = st.text_input("Password", type="password")
