@@ -16,7 +16,7 @@ WATERMARK_FILE = "p1.png"
 class PDF(FPDF):
     def header(self):
         try:
-            self.set_alpha(0.1)  # ปรับความจางตรงนี้
+            self.set_alpha(0.04)  # ปรับความจางตรงนี้
             self.image(WATERMARK_FILE, x=30, y=60, w=150)
             self.set_alpha(1)
         except:
