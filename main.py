@@ -8,7 +8,7 @@ from io import BytesIO
 # ================= CONFIGURATION =================
 SHEET_ID = "1Geh6DEbnkdDAgTQx_G4wu4cEjchO5EPwLcNCheSICNY"
 FONT_FILE = "THSARABUN BOLD.ttf" 
-WATERMARK_FILE = "p1.png" # ไฟล์รูปลายน้ำ
+WATERMARK_FILE = "p1.png"  # ไฟล์รูปลายน้ำ
 # =================================================
 
 # เชื่อมต่อ Google Sheets
@@ -50,20 +50,12 @@ def create_pdf(df, sheet_name):
     pdf = FPDF()
     pdf.add_page()
     
-    # --- ส่วนการเพิ่มรูปลายน้ำแบบโปร่งใส (แก้ไขใหม่) ---
+    # --- ส่วนการเพิ่มรูปลายน้ำ (เพิ่มใหม่) ---
     try:
-        # กำหนดค่าความโปร่งใส (0.0 ถึง 1.0)
-        # 0.15 หมายถึงโปร่งใส 85% (จางมาก)
-        pdf.set_alpha(0.15) 
-        
-        # วางรูป p1.png ไว้ตรงกลาง (ปรับค่า x, y, w ได้ตามต้องการ)
-        pdf.image(WATERMARK_FILE, x=55, y=80, w=100)
-        
-        # คืนค่าความโปร่งใสเป็นปกติ (1.0) เพื่อไม่ให้กระทบข้อความ
-        pdf.set_alpha(1.0)
+        # วางรูป p1.png ไว้ตรงกลาง (x=55, y=80, กว้าง=100) ปรับค่าได้ตามต้องการ
+        # แนะนำให้ใช้รูปที่มีความโปร่งใส (Transparent PNG) เพื่อความสวยงาม
+        pdf.image(WATERMARK_FILE, x=55, y=80, w=100) 
     except Exception as e:
-        # คืนค่าความโปร่งใสเป็นปกติหากเกิดข้อผิดพลาด
-        pdf.set_alpha(1.0)
         pass # ถ้าไม่มีไฟล์รูปให้ข้ามไปทำงานส่วนอื่นต่อ
     # -----------------------------------
 
