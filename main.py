@@ -34,7 +34,7 @@ def get_data(sheet_name):
             st.error(f"Error แผ่นงาน {sheet_name}: {e}")
     return pd.DataFrame()
 
-# --- สร้าง PDF รูปแบบมืออาชีพ ---
+# --- สร้าง PDF รูปแบบมืออาชีพ (มี Header 2 แถว) ---
 def create_pdf(df, user_id, sheet_name):
     pdf = FPDF()
     pdf.add_page()
@@ -45,7 +45,7 @@ def create_pdf(df, user_id, sheet_name):
     except:
         pdf.set_font("Arial", size=14)
 
-    # --- ส่วนหัวกระดาษ (Header) ---
+    # หัวกระดาษ 2 แถว
     pdf.set_font('THSarabun', '', 20)
     pdf.cell(0, 10, "บริษัท น้ำตาลกกกกก จำกัด", ln=True, align='C')
     pdf.set_font('THSarabun', '', 16)
@@ -56,38 +56,16 @@ def create_pdf(df, user_id, sheet_name):
     pdf.ln(10)
 
     if not df.empty:
-        # 1. กรณีแผ่นงาน "data" (รูปแบบรายงานแนวตั้ง)
-        if sheet_name == "data":
-            pdf.set_font('THSarabun', '', 14)
-            for _, row in df.iterrows():
-                for col in df.columns:
-                    # แสดงชื่อคอลัมน์และข้อมูลแบบมีเส้นใต้ (ไม่มีสีพื้นหลัง)
-                    pdf.set_font('THSarabun', '', 14) 
-                    pdf.cell(60, 10, f"{col} :", border='B', align='L')
-                    
-                    pdf.set_font('THSarabun', '', 14)
-                    pdf.cell(130, 10, str(row[col]), border='B', align='L')
-                    pdf.ln(12) 
-                pdf.ln(10)
-        
-        # 2. กรณีแผ่นงานอื่นๆ (รูปแบบตารางแนวนอน)
-        else:
-            pdf.set_font('THSarabun', '', 12)
-            # คำนวณความกว้างคอลัมน์อัตโนมัติ
-            col_width = 190 / len(df.columns) if len(df.columns) > 0 else 38
-            
-            # หัวตาราง
+        # รูปแบบรายงานแนวตั้งสำหรับแผ่นงาน "data"
+        pdf.set_font('THSarabun', '', 14)
+        for _, row in df.iterrows():
             for col in df.columns:
-                pdf.cell(col_width, 10, str(col), border=1, align='C')
-            pdf.ln()
-            
-            # ข้อมูลในตาราง
-            for _, row in df.iterrows():
-                for item in row:
-                    pdf.cell(col_width, 10, str(item), border=1)
-                pdf.ln()
+                pdf.set_font('THSarabun', '', 14)
+                pdf.cell(60, 10, f"{col} :", border='B', align='L')
+                pdf.cell(130, 10, str(row[col]), border='B', align='L')
+                pdf.ln(12) 
+            pdf.ln(10)
     
-    # คืนค่าเป็น Bytes พร้อม encode สำหรับภาษาไทย
     return pdf.output(dest='S').encode('latin-1')
 
 # --- ฟังก์ชันส่งออก Excel ---
@@ -97,7 +75,7 @@ def to_excel(df):
         df.to_excel(writer, index=False, sheet_name='Sheet1')
     return output.getvalue()
 
-# --- ระบบ UI และ Logic หลัก ---
+# --- ระบบ UI และ Login ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
@@ -136,38 +114,51 @@ else:
                 st.dataframe(filtered)
                 st.write("---")
                 
-                # --- ปุ่มดาวน์โหลด ---
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    try:
-                        pdf_bytes = create_pdf(filtered, st.session_state.user_id, name)
-                        st.download_button(
-                            label="📥 Download PDF",
-                            data=pdf_bytes,
-                            file_name=f"report_{name}.pdf",
-                            mime="application/pdf"
-                        )
-                    except Exception as e:
-                        st.error(f"Error PDF: {e}")
-
-                with col2:
+                # --- จัดการส่วนปุ่ม Download ---
+                if name == "data":
+                    # เมนูข้อมูลสรุป (แสดงทั้ง PDF และ Excel)
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        try:
+                            pdf_bytes = create_pdf(filtered, st.session_state.user_id, name)
+                            st.download_button(
+                                label="📥 Download PDF",
+                                data=pdf_bytes,
+                                file_name=f"report_{name}.pdf",
+                                mime="application/pdf"
+                            )
+                        except Exception as e:
+                            st.error(f"Error PDF: {e}")
+                    with c2:
+                        try:
+                            excel_data = to_excel(filtered)
+                            st.download_button(
+                                label="📥 Download Excel",
+                                data=excel_data,
+                                file_name=f"report_{name}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
+                        except Exception as e:
+                            st.error(f"Error Excel: {e}")
+                else:
+                    # เมนูอื่นๆ (แสดงเฉพาะ Excel)
                     try:
                         excel_data = to_excel(filtered)
                         st.download_button(
                             label="📥 Download Excel",
                             data=excel_data,
                             file_name=f"report_{name}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True # ขยายปุ่มให้เต็มความกว้างเพื่อความสวยงาม
                         )
                     except Exception as e:
                         st.error(f"Error Excel: {e}")
             else:
-                st.info("ไม่มีข้อมูลของคุณในระบบ")
+                st.info("ไม่มีข้อมูลของคุณ")
         else:
-            st.warning(f"ไม่พบข้อมูลที่เกี่ยวข้องในแผ่นงาน {name}")
+            st.warning(f"ไม่พบข้อมูลใน {name}")
 
-    # แมปเมนูกับชื่อแผ่นงาน
+    # แมปเมนู
     mapping = {
         "ข้อมูลสรุป": "data",
         "เงินออม": "data1",
