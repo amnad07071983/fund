@@ -11,7 +11,7 @@ SHEET_ID = "1Geh6DEbnkdDAgTQx_G4wu4cEjchO5EPwLcNCheSICNY"
 FONT_FILE = "THSARABUN BOLD.ttf" 
 # =================================================
 
-# --- เชื่อมต่อ Google Sheets ผ่าน Secrets ---
+# --- เชื่อมต่อ Google Sheets ---
 def init_connection():
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -34,10 +34,11 @@ def get_data(sheet_name):
             st.error(f"Error แผ่นงาน {sheet_name}: {e}")
     return pd.DataFrame()
 
-# --- สร้าง PDF รองรับภาษาไทย ---
+# --- สร้าง PDF (แก้ไขให้รองรับ Byte Output) ---
 def create_pdf(df, user_id, sheet_name):
     pdf = FPDF()
     pdf.add_page()
+    
     try:
         pdf.add_font('THSarabun', '', FONT_FILE, uni=True)
         pdf.set_font('THSarabun', '', 18)
@@ -47,33 +48,29 @@ def create_pdf(df, user_id, sheet_name):
     pdf.cell(0, 10, f"รายงานข้อมูล ({sheet_name}) - User: {user_id}", ln=True, align='C')
     pdf.ln(5)
     
-    # วาดตาราง
     pdf.set_font('THSarabun', '', 12)
     if not df.empty:
         col_width = 190 / len(df.columns)
-        
-        # หัวตาราง
         for col in df.columns:
             pdf.cell(col_width, 10, str(col), border=1, align='C')
         pdf.ln()
         
-        # ข้อมูล
         for _, row in df.iterrows():
             for item in row:
                 pdf.cell(col_width, 10, str(item), border=1)
             pdf.ln()
-        
-    return pdf.output(dest='S')
+    
+    # ดึงค่าเป็น Byte โดยตรง
+    return pdf.output(dest='S').encode('latin-1')
 
-# --- ฟังก์ชันแปลงข้อมูลเป็น Excel ---
+# --- ฟังก์ชันแปลงเป็น Excel ---
 def to_excel(df):
     output = BytesIO()
-    # ต้องติดตั้ง pip install xlsxwriter
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Sheet1')
     return output.getvalue()
 
-# --- ระบบ Session & UI ---
+# --- ระบบ UI ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
@@ -110,23 +107,24 @@ else:
             
             if not filtered.empty:
                 st.dataframe(filtered)
-                
-                # --- ส่วนปุ่ม Download ---
                 st.write("---")
+                
+                # --- ส่วนปุ่ม Download (ใช้ Download Button มาตรฐาน) ---
                 c1, c2 = st.columns(2)
                 
                 with c1:
-                    # PDF Download
                     try:
-                        pdf_data = create_pdf(filtered, st.session_state.user_id, name)
-                        b64 = base64.b64encode(pdf_data).decode()
-                        href = f'<a href="data:application/pdf;base64,{b64}" download="report_{name}.pdf" style="text-decoration:none;"><button style="background-color:#FF4B4B; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer;">📥 Download PDF</button></a>'
-                        st.markdown(href, unsafe_allow_html=True)
+                        pdf_bytes = create_pdf(filtered, st.session_state.user_id, name)
+                        st.download_button(
+                            label="📥 Download PDF",
+                            data=pdf_bytes,
+                            file_name=f"report_{name}.pdf",
+                            mime="application/pdf"
+                        )
                     except Exception as e:
-                        st.error(f"ไม่สามารถสร้าง PDF ได้: {e}")
+                        st.error(f"Error PDF: {e}")
 
                 with c2:
-                    # Excel Download
                     try:
                         excel_data = to_excel(filtered)
                         st.download_button(
@@ -136,18 +134,13 @@ else:
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )
                     except Exception as e:
-                        st.error(f"ไม่สามารถสร้าง Excel ได้: {e}")
+                        st.error(f"Error Excel: {e}")
             else:
                 st.info("ไม่มีข้อมูลของคุณในระบบ")
         else:
-            st.warning(f"ไม่พบคอลัมน์ 'user' ในแผ่นงาน {name}")
+            st.warning(f"ไม่พบข้อมูลในแผ่นงาน {name}")
 
-    # แสดงเนื้อหาตามเมนูที่เลือก
-    if menu == "ข้อมูลสรุป": 
-        show_page("data")
-    elif menu == "เงินออม": 
-        show_page("data1")
-    elif menu == "เงินกู้ยืม": 
-        show_page("data2")
-    elif menu == "หลักทรัพย์ค้ำประกัน": 
-        show_page("data3")
+    if menu == "ข้อมูลสรุป": show_page("data")
+    elif menu == "เงินออม": show_page("data1")
+    elif menu == "เงินกู้ยืม": show_page("data2")
+    elif menu == "หลักทรัพย์ค้ำประกัน": show_page("data3")
