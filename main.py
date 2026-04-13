@@ -6,11 +6,12 @@ from fpdf import FPDF
 from io import BytesIO
 
 # ================= CONFIGURATION =================
+# ตรวจสอบให้แน่ใจว่าไฟล์ Font อยู่ในโฟลเดอร์เดียวกับไฟล์ main.py
 SHEET_ID = "1Geh6DEbnkdDAgTQx_G4wu4cEjchO5EPwLcNCheSICNY"
 FONT_FILE = "THSARABUN BOLD.ttf" 
 # =================================================
 
-# ใช้ st.cache_resource เพื่อเชื่อมต่อครั้งเดียว
+# เชื่อมต่อ Google Sheets
 @st.cache_resource
 def init_connection():
     try:
@@ -23,8 +24,8 @@ def init_connection():
         st.error(f"การเชื่อมต่อผิดพลาด: {e}")
         return None
 
-# ใช้ st.cache_data เพื่อจำค่าข้อมูล ลดการเรียก Google Sheets
-@st.cache_data(ttl=600) # จำข้อมูลไว้ 10 นาที (600 วินาที)
+# ดึงข้อมูลจาก Sheet
+@st.cache_data(ttl=600)
 def get_data_from_sheet(sheet_name):
     client = init_connection()
     if client:
@@ -45,31 +46,41 @@ def get_data_from_sheet(sheet_name):
             st.error(f"Error {sheet_name}: {e}")
     return pd.DataFrame()
 
+# สร้างไฟล์ PDF (จุดที่แก้ไข Error)
 def create_pdf(df, sheet_name):
+    # ใช้ fpdf2 แนะนำให้ install ด้วย 'pip install fpdf2'
     pdf = FPDF()
     pdf.add_page()
+    
     try:
-        pdf.add_font('THSarabun', '', FONT_FILE, uni=True)
-        pdf.set_font('THSarabun', '', 14)
-    except:
+        # การโหลดฟอนต์สำหรับ fpdf2 (ไม่ต้องใช้ uni=True)
+        pdf.add_font('THSarabun', '', FONT_FILE)
+        pdf.set_font('THSarabun', '', 16)
+    except Exception as e:
+        st.warning(f"ระบบหาไฟล์ฟอนต์ไทยไม่เจอ: {e}")
         pdf.set_font("Arial", size=12)
 
-    if not df.empty and sheet_name == "data":
+    if not df.empty:
+        # วาดกรอบและแสดงข้อมูล
         total_rows = len(df.columns)
         frame_height = (total_rows * 10) + 10
-        # วาดกรอบสี่เหลี่ยมคลุมข้อมูล
         pdf.rect(10, 10, 190, frame_height)
         
         pdf.set_y(15)
         for _, row in df.iterrows():
             for col in df.columns:
                 pdf.set_x(15)
-                pdf.cell(60, 10, f"{col} : ", border=0)
-                pdf.cell(115, 10, str(row[col]), border=0, align='L')
+                # จัดการข้อมูลให้เป็น string ก่อนใส่ใน PDF
+                col_name = str(col)
+                val_data = str(row[col])
+                pdf.cell(60, 10, f"{col_name} : ", border=0)
+                pdf.cell(115, 10, val_data, border=0, align='L')
                 pdf.ln(10)
     
-    return pdf.output(dest='S').encode('latin-1')
+    # แก้ไขจุด AttributeError: คืนค่าเป็น bytes โดยตรง
+    return pdf.output()
 
+# สร้างไฟล์ Excel
 def to_excel(df):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -87,21 +98,24 @@ if not st.session_state.logged_in:
         p = st.text_input("Password", type="password")
         if st.form_submit_button("เข้าสู่ระบบ"):
             users_df = get_data_from_sheet("users")
-            auth = users_df[(users_df['username'].astype(str) == str(u)) & 
-                            (users_df['password'].astype(str) == str(p))]
-            if not auth.empty:
-                st.session_state.logged_in = True
-                st.session_state.user_id = str(u)
-                st.rerun()
+            if not users_df.empty:
+                auth = users_df[(users_df['username'].astype(str) == str(u)) & 
+                                (users_df['password'].astype(str) == str(p))]
+                if not auth.empty:
+                    st.session_state.logged_in = True
+                    st.session_state.user_id = str(u)
+                    st.rerun()
+                else:
+                    st.error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
             else:
-                st.error("ข้อมูลไม่ถูกต้อง")
+                st.error("ไม่สามารถดึงข้อมูลผู้ใช้งานได้")
 else:
     st.sidebar.write(f"สวัสดีคุณ: **{st.session_state.user_id}**")
     menu = st.sidebar.radio("เมนู", ["ข้อมูลสรุป", "เงินออม", "เงินกู้ยืม", "หลักทรัพย์ค้ำประกัน"])
     
     if st.sidebar.button("ออกจากระบบ"):
         st.session_state.logged_in = False
-        st.cache_data.clear() # เคลียร์แคชเมื่อออก
+        st.cache_data.clear()
         st.rerun()
 
     mapping = {"ข้อมูลสรุป": "data", "เงินออม": "data1", "เงินกู้ยืม": "data2", "หลักทรัพย์ค้ำประกัน": "data3"}
@@ -116,11 +130,21 @@ else:
             st.dataframe(filtered, use_container_width=True)
             st.divider()
             
+            # ส่วนของการ Download
             if sheet_name == "data":
                 col1, col2 = st.columns(2)
                 with col1:
-                    pdf_bytes = create_pdf(filtered, sheet_name)
-                    st.download_button("📥 PDF Report", pdf_bytes, f"report_{st.session_state.user_id}.pdf", "application/pdf")
+                    # สร้าง PDF
+                    try:
+                        pdf_bytes = create_pdf(filtered, sheet_name)
+                        st.download_button(
+                            label="📥 PDF Report",
+                            data=pdf_bytes,
+                            file_name=f"report_{st.session_state.user_id}.pdf",
+                            mime="application/pdf"
+                        )
+                    except Exception as e:
+                        st.error(f"ไม่สามารถสร้าง PDF ได้: {e}")
                 with col2:
                     excel_bytes = to_excel(filtered)
                     st.download_button("📥 Excel Report", excel_bytes, f"report_{st.session_state.user_id}.xlsx")
