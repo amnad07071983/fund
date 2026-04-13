@@ -34,7 +34,7 @@ def get_data(sheet_name):
             st.error(f"Error แผ่นงาน {sheet_name}: {e}")
     return pd.DataFrame()
 
-# --- สร้าง PDF (แยกรูปแบบสำหรับ data และอื่นๆ) ---
+# --- สร้าง PDF รูปแบบมืออาชีพ ---
 def create_pdf(df, user_id, sheet_name):
     pdf = FPDF()
     pdf.add_page()
@@ -45,48 +45,59 @@ def create_pdf(df, user_id, sheet_name):
     except:
         pdf.set_font("Arial", size=14)
 
-    pdf.cell(0, 10, f"รายงานข้อมูล ({sheet_name}) - User: {user_id}", ln=True, align='C')
-    pdf.ln(5)
+    # --- ส่วนหัวกระดาษ (Header) ---
+    pdf.set_font('THSarabun', '', 20)
+    pdf.cell(0, 10, "บริษัท น้ำตาลกกกกก จำกัด", ln=True, align='C')
+    pdf.set_font('THSarabun', '', 16)
+    pdf.cell(0, 10, "ใบสรุปข้อมูลกองทุน", ln=True, align='C')
     
+    # เส้นใต้หัวกระดาษ
+    pdf.line(10, 32, 200, 32)
+    pdf.ln(10)
+
     if not df.empty:
-        # กรณีแผ่นงาน "data" ให้แสดงผลแบบแนวตั้ง (List View)
+        # 1. กรณีแผ่นงาน "data" (รูปแบบรายงานแนวตั้ง)
         if sheet_name == "data":
             pdf.set_font('THSarabun', '', 14)
             for _, row in df.iterrows():
                 for col in df.columns:
-                    # หัวข้อ (พื้นหลังสีเทาอ่อน)
-                    pdf.set_fill_color(240, 240, 240)
-                    pdf.cell(50, 10, str(col), border=1, fill=True)
-                    # ข้อมูล
-                    pdf.cell(140, 10, str(row[col]), border=1)
-                    pdf.ln()
-                pdf.ln(10) # เว้นระยะห่างระหว่างกลุ่มข้อมูล
+                    # แสดงชื่อคอลัมน์และข้อมูลแบบมีเส้นใต้ (ไม่มีสีพื้นหลัง)
+                    pdf.set_font('THSarabun', '', 14) 
+                    pdf.cell(60, 10, f"{col} :", border='B', align='L')
+                    
+                    pdf.set_font('THSarabun', '', 14)
+                    pdf.cell(130, 10, str(row[col]), border='B', align='L')
+                    pdf.ln(12) 
+                pdf.ln(10)
         
-        # กรณีแผ่นงานอื่นๆ ให้แสดงแบบตารางแนวนอน (Table View)
+        # 2. กรณีแผ่นงานอื่นๆ (รูปแบบตารางแนวนอน)
         else:
             pdf.set_font('THSarabun', '', 12)
-            col_width = 190 / len(df.columns)
-            # ส่วนหัวตาราง
+            # คำนวณความกว้างคอลัมน์อัตโนมัติ
+            col_width = 190 / len(df.columns) if len(df.columns) > 0 else 38
+            
+            # หัวตาราง
             for col in df.columns:
                 pdf.cell(col_width, 10, str(col), border=1, align='C')
             pdf.ln()
-            # ส่วนข้อมูล
+            
+            # ข้อมูลในตาราง
             for _, row in df.iterrows():
                 for item in row:
                     pdf.cell(col_width, 10, str(item), border=1)
                 pdf.ln()
     
+    # คืนค่าเป็น Bytes พร้อม encode สำหรับภาษาไทย
     return pdf.output(dest='S').encode('latin-1')
 
-# --- ฟังก์ชันแปลงข้อมูลเป็น Excel ---
+# --- ฟังก์ชันส่งออก Excel ---
 def to_excel(df):
     output = BytesIO()
-    # ตรวจสอบว่าได้ติดตั้ง xlsxwriter ในระบบแล้ว
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Sheet1')
     return output.getvalue()
 
-# --- ระบบ Session & UI ---
+# --- ระบบ UI และ Logic หลัก ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
@@ -125,10 +136,10 @@ else:
                 st.dataframe(filtered)
                 st.write("---")
                 
-                # --- ส่วนปุ่ม Download ---
-                c1, c2 = st.columns(2)
+                # --- ปุ่มดาวน์โหลด ---
+                col1, col2 = st.columns(2)
                 
-                with c1:
+                with col1:
                     try:
                         pdf_bytes = create_pdf(filtered, st.session_state.user_id, name)
                         st.download_button(
@@ -138,9 +149,9 @@ else:
                             mime="application/pdf"
                         )
                     except Exception as e:
-                        st.error(f"ไม่สามารถสร้าง PDF ได้: {e}")
+                        st.error(f"Error PDF: {e}")
 
-                with c2:
+                with col2:
                     try:
                         excel_data = to_excel(filtered)
                         st.download_button(
@@ -150,18 +161,17 @@ else:
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )
                     except Exception as e:
-                        st.error(f"ไม่สามารถสร้าง Excel ได้: {e}")
+                        st.error(f"Error Excel: {e}")
             else:
                 st.info("ไม่มีข้อมูลของคุณในระบบ")
         else:
-            st.warning(f"ไม่พบข้อมูลที่ต้องการในแผ่นงาน {name}")
+            st.warning(f"ไม่พบข้อมูลที่เกี่ยวข้องในแผ่นงาน {name}")
 
-    # การเรียกใช้งานตามเมนู
-    if menu == "ข้อมูลสรุป": 
-        show_page("data")
-    elif menu == "เงินออม": 
-        show_page("data1")
-    elif menu == "เงินกู้ยืม": 
-        show_page("data2")
-    elif menu == "หลักทรัพย์ค้ำประกัน": 
-        show_page("data3")
+    # แมปเมนูกับชื่อแผ่นงาน
+    mapping = {
+        "ข้อมูลสรุป": "data",
+        "เงินออม": "data1",
+        "เงินกู้ยืม": "data2",
+        "หลักทรัพย์ค้ำประกัน": "data3"
+    }
+    show_page(mapping[menu])
