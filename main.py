@@ -68,7 +68,7 @@ def create_pdf(df, sheet_name):
     except:
         font_name = 'Helvetica'
 
-    # ===== ลายน้ำ + กรอบ =====
+    # ===== ลายน้ำ + กรอบคู่ =====
     def add_watermark(c: canvas.Canvas, doc):
         try:
             c.saveState()
@@ -87,12 +87,22 @@ def create_pdf(df, sheet_name):
                         height=img_height,
                         mask='auto')
 
-            # --- กรอบสีเทาเต็มหน้า ---
+            # --- กรอบคู่สีเทา ---
             c.setStrokeColorRGB(0.6, 0.6, 0.6)
-            c.setLineWidth(1)
 
-            margin = 10
-            c.rect(margin, margin, width - 2*margin, height - 2*margin)
+            # กรอบนอก
+            c.setLineWidth(1)
+            margin_outer = 15
+            c.rect(margin_outer, margin_outer,
+                   width - 2*margin_outer,
+                   height - 2*margin_outer)
+
+            # กรอบใน
+            c.setLineWidth(0.8)
+            margin_inner = 22
+            c.rect(margin_inner, margin_inner,
+                   width - 2*margin_inner,
+                   height - 2*margin_inner)
 
             c.restoreState()
         except:
