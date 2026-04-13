@@ -11,7 +11,7 @@ SHEET_ID = "1Geh6DEbnkdDAgTQx_G4wu4cEjchO5EPwLcNCheSICNY"
 FONT_FILE = "THSARABUN BOLD.ttf" 
 # =================================================
 
-# --- เชื่อมต่อ Google Sheets ---
+# --- เชื่อมต่อ Google Sheets ผ่าน Secrets ---
 def init_connection():
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -34,7 +34,7 @@ def get_data(sheet_name):
             st.error(f"Error แผ่นงาน {sheet_name}: {e}")
     return pd.DataFrame()
 
-# --- สร้าง PDF (แก้ไขให้รองรับ Byte Output) ---
+# --- สร้าง PDF (แยกรูปแบบสำหรับ data และอื่นๆ) ---
 def create_pdf(df, user_id, sheet_name):
     pdf = FPDF()
     pdf.add_page()
@@ -48,29 +48,45 @@ def create_pdf(df, user_id, sheet_name):
     pdf.cell(0, 10, f"รายงานข้อมูล ({sheet_name}) - User: {user_id}", ln=True, align='C')
     pdf.ln(5)
     
-    pdf.set_font('THSarabun', '', 12)
     if not df.empty:
-        col_width = 190 / len(df.columns)
-        for col in df.columns:
-            pdf.cell(col_width, 10, str(col), border=1, align='C')
-        pdf.ln()
+        # กรณีแผ่นงาน "data" ให้แสดงผลแบบแนวตั้ง (List View)
+        if sheet_name == "data":
+            pdf.set_font('THSarabun', '', 14)
+            for _, row in df.iterrows():
+                for col in df.columns:
+                    # หัวข้อ (พื้นหลังสีเทาอ่อน)
+                    pdf.set_fill_color(240, 240, 240)
+                    pdf.cell(50, 10, str(col), border=1, fill=True)
+                    # ข้อมูล
+                    pdf.cell(140, 10, str(row[col]), border=1)
+                    pdf.ln()
+                pdf.ln(10) # เว้นระยะห่างระหว่างกลุ่มข้อมูล
         
-        for _, row in df.iterrows():
-            for item in row:
-                pdf.cell(col_width, 10, str(item), border=1)
+        # กรณีแผ่นงานอื่นๆ ให้แสดงแบบตารางแนวนอน (Table View)
+        else:
+            pdf.set_font('THSarabun', '', 12)
+            col_width = 190 / len(df.columns)
+            # ส่วนหัวตาราง
+            for col in df.columns:
+                pdf.cell(col_width, 10, str(col), border=1, align='C')
             pdf.ln()
+            # ส่วนข้อมูล
+            for _, row in df.iterrows():
+                for item in row:
+                    pdf.cell(col_width, 10, str(item), border=1)
+                pdf.ln()
     
-    # ดึงค่าเป็น Byte โดยตรง
     return pdf.output(dest='S').encode('latin-1')
 
-# --- ฟังก์ชันแปลงเป็น Excel ---
+# --- ฟังก์ชันแปลงข้อมูลเป็น Excel ---
 def to_excel(df):
     output = BytesIO()
+    # ตรวจสอบว่าได้ติดตั้ง xlsxwriter ในระบบแล้ว
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Sheet1')
     return output.getvalue()
 
-# --- ระบบ UI ---
+# --- ระบบ Session & UI ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
@@ -109,7 +125,7 @@ else:
                 st.dataframe(filtered)
                 st.write("---")
                 
-                # --- ส่วนปุ่ม Download (ใช้ Download Button มาตรฐาน) ---
+                # --- ส่วนปุ่ม Download ---
                 c1, c2 = st.columns(2)
                 
                 with c1:
@@ -122,7 +138,7 @@ else:
                             mime="application/pdf"
                         )
                     except Exception as e:
-                        st.error(f"Error PDF: {e}")
+                        st.error(f"ไม่สามารถสร้าง PDF ได้: {e}")
 
                 with c2:
                     try:
@@ -134,13 +150,18 @@ else:
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )
                     except Exception as e:
-                        st.error(f"Error Excel: {e}")
+                        st.error(f"ไม่สามารถสร้าง Excel ได้: {e}")
             else:
                 st.info("ไม่มีข้อมูลของคุณในระบบ")
         else:
-            st.warning(f"ไม่พบข้อมูลในแผ่นงาน {name}")
+            st.warning(f"ไม่พบข้อมูลที่ต้องการในแผ่นงาน {name}")
 
-    if menu == "ข้อมูลสรุป": show_page("data")
-    elif menu == "เงินออม": show_page("data1")
-    elif menu == "เงินกู้ยืม": show_page("data2")
-    elif menu == "หลักทรัพย์ค้ำประกัน": show_page("data3")
+    # การเรียกใช้งานตามเมนู
+    if menu == "ข้อมูลสรุป": 
+        show_page("data")
+    elif menu == "เงินออม": 
+        show_page("data1")
+    elif menu == "เงินกู้ยืม": 
+        show_page("data2")
+    elif menu == "หลักทรัพย์ค้ำประกัน": 
+        show_page("data3")
