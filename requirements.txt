@@ -2,5 +2,5 @@ streamlit
 gspread
 oauth2client
 pandas
-fpdf
+fpdf2
 xlsxwriter
