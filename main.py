@@ -6,7 +6,7 @@ from fpdf import FPDF
 from io import BytesIO
 
 # ================= CONFIGURATION =================
-# ตรวจสอบให้แน่ใจว่าไฟล์ Font อยู่ในโฟลเดอร์เดียวกับไฟล์ main.py
+# ตรวจสอบว่าชื่อไฟล์ .ttf ใน GitHub ตรงกับชื่อนี้ทุกตัวอักษร
 SHEET_ID = "1Geh6DEbnkdDAgTQx_G4wu4cEjchO5EPwLcNCheSICNY"
 FONT_FILE = "THSARABUN BOLD.ttf" 
 # =================================================
@@ -46,39 +46,39 @@ def get_data_from_sheet(sheet_name):
             st.error(f"Error {sheet_name}: {e}")
     return pd.DataFrame()
 
-# สร้างไฟล์ PDF (จุดที่แก้ไข Error)
+# สร้างไฟล์ PDF (แก้ไขปัญหา Invalid binary data format และภาษาไทย)
 def create_pdf(df, sheet_name):
-    # ใช้ fpdf2 แนะนำให้ install ด้วย 'pip install fpdf2'
     pdf = FPDF()
     pdf.add_page()
     
     try:
-        # การโหลดฟอนต์สำหรับ fpdf2 (ไม่ต้องใช้ uni=True)
+        # โหลดฟอนต์ (รองรับภาษาไทย)
         pdf.add_font('THSarabun', '', FONT_FILE)
         pdf.set_font('THSarabun', '', 16)
     except Exception as e:
-        st.warning(f"ระบบหาไฟล์ฟอนต์ไทยไม่เจอ: {e}")
+        st.warning(f"โหลดฟอนต์ไทยไม่สำเร็จ: {e}")
         pdf.set_font("Arial", size=12)
 
     if not df.empty:
         # วาดกรอบและแสดงข้อมูล
-        total_rows = len(df.columns)
-        frame_height = (total_rows * 10) + 10
+        total_fields = len(df.columns)
+        frame_height = (total_fields * 10) + 10
         pdf.rect(10, 10, 190, frame_height)
         
         pdf.set_y(15)
         for _, row in df.iterrows():
             for col in df.columns:
                 pdf.set_x(15)
-                # จัดการข้อมูลให้เป็น string ก่อนใส่ใน PDF
+                # แปลงข้อมูลเป็น string
                 col_name = str(col)
                 val_data = str(row[col])
                 pdf.cell(60, 10, f"{col_name} : ", border=0)
                 pdf.cell(115, 10, val_data, border=0, align='L')
                 pdf.ln(10)
     
-    # แก้ไขจุด AttributeError: คืนค่าเป็น bytes โดยตรง
-    return pdf.output()
+    # แก้ไขจุดสำคัญ: แปลง bytearray เป็น bytes เพื่อให้ Streamlit รองรับ
+    output = pdf.output()
+    return bytes(output) if isinstance(output, bytearray) else output
 
 # สร้างไฟล์ Excel
 def to_excel(df):
@@ -99,6 +99,7 @@ if not st.session_state.logged_in:
         if st.form_submit_button("เข้าสู่ระบบ"):
             users_df = get_data_from_sheet("users")
             if not users_df.empty:
+                # ตรวจสอบการ Login
                 auth = users_df[(users_df['username'].astype(str) == str(u)) & 
                                 (users_df['password'].astype(str) == str(p))]
                 if not auth.empty:
@@ -106,9 +107,9 @@ if not st.session_state.logged_in:
                     st.session_state.user_id = str(u)
                     st.rerun()
                 else:
-                    st.error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง")
+                    st.error("ข้อมูล Login ไม่ถูกต้อง")
             else:
-                st.error("ไม่สามารถดึงข้อมูลผู้ใช้งานได้")
+                st.error("ไม่สามารถเชื่อมต่อฐานข้อมูลผู้ใช้ได้")
 else:
     st.sidebar.write(f"สวัสดีคุณ: **{st.session_state.user_id}**")
     menu = st.sidebar.radio("เมนู", ["ข้อมูลสรุป", "เงินออม", "เงินกู้ยืม", "หลักทรัพย์ค้ำประกัน"])
@@ -125,31 +126,41 @@ else:
     df = get_data_from_sheet(sheet_name)
     
     if not df.empty and 'user' in df.columns:
+        # กรองข้อมูลเฉพาะของ User ที่ Login
         filtered = df[df['user'].astype(str) == st.session_state.user_id]
         if not filtered.empty:
             st.dataframe(filtered, use_container_width=True)
             st.divider()
             
-            # ส่วนของการ Download
+            # ส่วนของการ Download รายงาน
             if sheet_name == "data":
                 col1, col2 = st.columns(2)
                 with col1:
-                    # สร้าง PDF
                     try:
-                        pdf_bytes = create_pdf(filtered, sheet_name)
+                        pdf_data = create_pdf(filtered, sheet_name)
                         st.download_button(
                             label="📥 PDF Report",
-                            data=pdf_bytes,
+                            data=pdf_data,
                             file_name=f"report_{st.session_state.user_id}.pdf",
                             mime="application/pdf"
                         )
                     except Exception as e:
                         st.error(f"ไม่สามารถสร้าง PDF ได้: {e}")
                 with col2:
-                    excel_bytes = to_excel(filtered)
-                    st.download_button("📥 Excel Report", excel_bytes, f"report_{st.session_state.user_id}.xlsx")
+                    excel_data = to_excel(filtered)
+                    st.download_button(
+                        label="📥 Excel Report",
+                        data=excel_data,
+                        file_name=f"report_{st.session_state.user_id}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
             else:
-                excel_bytes = to_excel(filtered)
-                st.download_button("📥 Download Excel", excel_bytes, f"data_{sheet_name}.xlsx", use_container_width=True)
+                excel_data = to_excel(filtered)
+                st.download_button(
+                    label="📥 Download Excel",
+                    data=excel_data,
+                    file_name=f"data_{sheet_name}.xlsx",
+                    use_container_width=True
+                )
         else:
-            st.info("ไม่พบข้อมูลของคุณ")
+            st.info("ไม่พบข้อมูลของคุณในส่วนนี้")
