@@ -6,9 +6,9 @@ from fpdf import FPDF
 from io import BytesIO
 
 # ================= CONFIGURATION =================
-# ตรวจสอบว่าชื่อไฟล์ .ttf ใน GitHub ตรงกับชื่อนี้ทุกตัวอักษร
 SHEET_ID = "1Geh6DEbnkdDAgTQx_G4wu4cEjchO5EPwLcNCheSICNY"
 FONT_FILE = "THSARABUN BOLD.ttf" 
+WATERMARK_FILE = "p1.png"  # ไฟล์รูปลายน้ำ
 # =================================================
 
 # เชื่อมต่อ Google Sheets
@@ -34,7 +34,6 @@ def get_data_from_sheet(sheet_name):
             worksheet = sh.worksheet(sheet_name)
             df = pd.DataFrame(worksheet.get_all_records())
             
-            # ฟอร์แมตตัวเลขที่มีคอมม่า
             target_cols = ["เงินออม-เพิ่มขึ้น", "เงินออม-ลดลง", "เงินออม-คงเหลือ", 
                            "หนี้-เพิ่มขึ้น", "หนี้-ลดลง", "หนี้คงเหลือ", "ดอกเบี้ย"]
             for col in target_cols:
@@ -46,13 +45,21 @@ def get_data_from_sheet(sheet_name):
             st.error(f"Error {sheet_name}: {e}")
     return pd.DataFrame()
 
-# สร้างไฟล์ PDF (แก้ไขปัญหา Invalid binary data format และภาษาไทย)
+# สร้างไฟล์ PDF พร้อมรูปลายน้ำ
 def create_pdf(df, sheet_name):
     pdf = FPDF()
     pdf.add_page()
     
+    # --- ส่วนการเพิ่มรูปลายน้ำ (เพิ่มใหม่) ---
     try:
-        # โหลดฟอนต์ (รองรับภาษาไทย)
+        # วางรูป p1.png ไว้ตรงกลาง (x=55, y=80, กว้าง=100) ปรับค่าได้ตามต้องการ
+        # แนะนำให้ใช้รูปที่มีความโปร่งใส (Transparent PNG) เพื่อความสวยงาม
+        pdf.image(WATERMARK_FILE, x=55, y=80, w=100) 
+    except Exception as e:
+        pass # ถ้าไม่มีไฟล์รูปให้ข้ามไปทำงานส่วนอื่นต่อ
+    # -----------------------------------
+
+    try:
         pdf.add_font('THSarabun', '', FONT_FILE)
         pdf.set_font('THSarabun', '', 16)
     except Exception as e:
@@ -60,7 +67,6 @@ def create_pdf(df, sheet_name):
         pdf.set_font("Arial", size=12)
 
     if not df.empty:
-        # วาดกรอบและแสดงข้อมูล
         total_fields = len(df.columns)
         frame_height = (total_fields * 10) + 10
         pdf.rect(10, 10, 190, frame_height)
@@ -69,14 +75,12 @@ def create_pdf(df, sheet_name):
         for _, row in df.iterrows():
             for col in df.columns:
                 pdf.set_x(15)
-                # แปลงข้อมูลเป็น string
                 col_name = str(col)
                 val_data = str(row[col])
                 pdf.cell(60, 10, f"{col_name} : ", border=0)
                 pdf.cell(115, 10, val_data, border=0, align='L')
                 pdf.ln(10)
     
-    # แก้ไขจุดสำคัญ: แปลง bytearray เป็น bytes เพื่อให้ Streamlit รองรับ
     output = pdf.output()
     return bytes(output) if isinstance(output, bytearray) else output
 
@@ -99,7 +103,6 @@ if not st.session_state.logged_in:
         if st.form_submit_button("เข้าสู่ระบบ"):
             users_df = get_data_from_sheet("users")
             if not users_df.empty:
-                # ตรวจสอบการ Login
                 auth = users_df[(users_df['username'].astype(str) == str(u)) & 
                                 (users_df['password'].astype(str) == str(p))]
                 if not auth.empty:
@@ -126,13 +129,11 @@ else:
     df = get_data_from_sheet(sheet_name)
     
     if not df.empty and 'user' in df.columns:
-        # กรองข้อมูลเฉพาะของ User ที่ Login
         filtered = df[df['user'].astype(str) == st.session_state.user_id]
         if not filtered.empty:
             st.dataframe(filtered, use_container_width=True)
             st.divider()
             
-            # ส่วนของการ Download รายงาน
             if sheet_name == "data":
                 col1, col2 = st.columns(2)
                 with col1:
