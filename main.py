@@ -2,14 +2,14 @@ import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
-from fpdf import FPDF
+from fpdf import FPDF  # fpdf2 ยังคงใช้อิมพอร์ตชื่อ FPDF
 from io import BytesIO
 import os
 
 # ================= CONFIGURATION =================
 SHEET_ID = "1Geh6DEbnkdDAgTQx_G4wu4cEjchO5EPwLcNCheSICNY"
 FONT_FILE = "THSARABUN BOLD.ttf" 
-LOGO_FILE = "p1.png"  # ไฟล์รูปลายน้ำ
+LOGO_FILE = "p1.png"
 # =================================================
 
 @st.cache_resource
@@ -45,20 +45,22 @@ def get_data_from_sheet(sheet_name):
     return pd.DataFrame()
 
 def create_pdf(df, sheet_name):
+    # ต้องใช้ fpdf2 เพื่อรองรับความโปร่งใส
     pdf = FPDF()
     pdf.add_page()
     
-    # --- การตั้งค่ารูปลายน้ำ (Watermark) ให้ใหญ่และอยู่ตรงกลาง ---
+    # --- การตั้งค่าลายน้ำให้จาง 40% (เฉพาะ fpdf2) ---
     if os.path.exists(LOGO_FILE):
-        img_w = 160  # กำหนดความกว้างรูป (160 มม. จากหน้ากระดาษกว้าง 210 มม.)
+        img_w = 160
         page_w = 210
         page_h = 297
-        
-        # คำนวณตำแหน่ง X และ Y เพื่อให้อยู่กึ่งกลางเป๊ะ
         x_pos = (page_w - img_w) / 2
-        y_pos = (page_h - img_w) / 2  # สมมติรูปเป็นจัตุรัส หรือปรับตามสัดส่วน
+        y_pos = (page_h - img_w) / 2
         
-        pdf.image(LOGO_FILE, x=x_pos, y=y_pos, w=img_w) 
+        # --- เริ่มส่วนที่แก้ไขสำหรับ fpdf2 ---
+        with pdf.local_context(alpha=0.4):  # กำหนดความทึบแสง 40% (0.4)
+            pdf.image(LOGO_FILE, x=x_pos, y=y_pos, w=img_w)
+        # --- จบส่วนที่แก้ไข ---
     
     try:
         pdf.add_font('THSarabun', '', FONT_FILE, uni=True)
@@ -67,11 +69,8 @@ def create_pdf(df, sheet_name):
         pdf.set_font("Arial", size=12)
 
     if not df.empty and sheet_name == "data":
-        # คำนวณความสูงกรอบตามจำนวนคอลัมน์
         total_rows = len(df.columns)
         frame_height = (total_rows * 10) + 10
-        
-        # วาดกรอบสี่เหลี่ยมคลุมข้อมูล
         pdf.rect(10, 10, 190, frame_height)
         
         pdf.set_y(15)
@@ -101,14 +100,15 @@ if not st.session_state.logged_in:
         p = st.text_input("Password", type="password")
         if st.form_submit_button("เข้าสู่ระบบ"):
             users_df = get_data_from_sheet("users")
-            auth = users_df[(users_df['username'].astype(str) == str(u)) & 
-                            (users_df['password'].astype(str) == str(p))]
-            if not auth.empty:
-                st.session_state.logged_in = True
-                st.session_state.user_id = str(u)
-                st.rerun()
-            else:
-                st.error("ข้อมูลไม่ถูกต้อง")
+            if not users_df.empty:
+                auth = users_df[(users_df['username'].astype(str) == str(u)) & 
+                                (users_df['password'].astype(str) == str(p))]
+                if not auth.empty:
+                    st.session_state.logged_in = True
+                    st.session_state.user_id = str(u)
+                    st.rerun()
+                else:
+                    st.error("ข้อมูลไม่ถูกต้อง")
 else:
     st.sidebar.write(f"สวัสดีคุณ: **{st.session_state.user_id}**")
     menu = st.sidebar.radio("เมนู", ["ข้อมูลสรุป", "เงินออม", "เงินกู้ยืม", "หลักทรัพย์ค้ำประกัน"])
