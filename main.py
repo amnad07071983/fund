@@ -9,7 +9,7 @@ import os
 # ================= CONFIGURATION =================
 SHEET_ID = "1Geh6DEbnkdDAgTQx_G4wu4cEjchO5EPwLcNCheSICNY"
 FONT_FILE = "THSARABUN BOLD.ttf" 
-LOGO_FILE = "p1.png"  # ไฟล์รูปลายน้ำ
+LOGO_FILE = "p1.png" 
 # =================================================
 
 @st.cache_resource
@@ -46,36 +46,35 @@ def get_data_from_sheet(sheet_name):
     return pd.DataFrame()
 
 def create_pdf(df, sheet_name):
-    # ใช้ fpdf2 เพื่อจัดการภาพลายน้ำ
+    # ใช้ fpdf2
     pdf = FPDF()
     pdf.add_page()
     
-    # 1. แทรกรูปลายน้ำ (ปรับขนาดใหญ่และวางตรงกลาง)
+    # --- 1. ใส่รูปลายน้ำ (จาง 40%) ---
     if os.path.exists(LOGO_FILE):
         try:
             img_w = 160
             x_pos = (210 - img_w) / 2
             y_pos = (297 - img_w) / 2
-            
-            # ใช้ set_alpha แทน local_context เพื่อเลี่ยง Error ในบางเวอร์ชัน
-            pdf.set_alpha(0.4) 
+            # ตั้งค่าความโปร่งใส 0.4 = 40%
+            pdf.set_alpha(0.4)
             pdf.image(LOGO_FILE, x=x_pos, y=y_pos, w=img_w)
-            pdf.set_alpha(1.0) # คืนค่าความเข้มปกติให้ข้อความ
+            pdf.set_alpha(1.0) # คืนค่าความชัดให้ตัวหนังสือ
         except:
-            pass # หากไฟล์ภาพมีปัญหาให้ข้ามไปเพื่อไม่ให้โปรแกรมหยุดทำงาน
+            pass
 
-    # 2. ตั้งค่าฟอนต์
+    # --- 2. ตั้งค่าฟอนต์ ---
     try:
         pdf.add_font('THSarabun', '', FONT_FILE, uni=True)
         pdf.set_font('THSarabun', '', 14)
     except:
         pdf.set_font("Arial", size=12)
 
-    # 3. วาดตารางข้อมูล (เฉพาะหน้า data)
+    # --- 3. สร้างกรอบและข้อมูล (หน้า data) ---
     if not df.empty and sheet_name == "data":
-        total_rows = len(df.columns)
-        frame_height = (total_rows * 10) + 10
-        pdf.rect(10, 10, 190, frame_height) # วาดกรอบใหญ่คลุมข้อมูล
+        # คำนวณความสูงกรอบ
+        frame_height = (len(df.columns) * 10) + 10
+        pdf.rect(10, 10, 190, frame_height)
         
         pdf.set_y(15)
         for _, row in df.iterrows():
@@ -85,22 +84,22 @@ def create_pdf(df, sheet_name):
                 pdf.cell(115, 10, str(row[col]), border=0, align='L')
                 pdf.ln(10)
     
-    # คืนค่าเป็น bytes สำหรับ download_button
-    return pdf.output()
+    # แก้ไขปัญหา Invalid binary data โดยส่งออกแบบ bytes
+    return bytes(pdf.output())
 
 def to_excel(df):
     output = BytesIO()
-    # ตรวจสอบว่ามี xlsxwriter ในระบบ (เลี่ยง Error จากรูปที่ 1)
+    # ระบุ engine เป็น xlsxwriter
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Sheet1')
     return output.getvalue()
 
-# --- Main Interface ---
+# --- UI LOGIC ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
-    st.title("🔐 ระบบกองทุน (เวอร์ชันเสถียร)")
+    st.title("🔐 ระบบกองทุนพนักงาน")
     with st.form("login_box"):
         u = st.text_input("Username")
         p = st.text_input("Password", type="password")
@@ -114,9 +113,9 @@ if not st.session_state.logged_in:
                     st.session_state.user_id = str(u)
                     st.rerun()
                 else:
-                    st.error("ข้อมูลไม่ถูกต้อง")
+                    st.error("Username หรือ Password ไม่ถูกต้อง")
 else:
-    st.sidebar.write(f"สวัสดีคุณ: **{st.session_state.user_id}**")
+    st.sidebar.success(f"User: {st.session_state.user_id}")
     menu = st.sidebar.radio("เมนู", ["ข้อมูลสรุป", "เงินออม", "เงินกู้ยืม", "หลักทรัพย์ค้ำประกัน"])
     
     if st.sidebar.button("ออกจากระบบ"):
@@ -137,23 +136,23 @@ else:
             st.divider()
             
             if sheet_name == "data":
-                col1, col2 = st.columns(2)
-                with col1:
+                c1, c2 = st.columns(2)
+                with c1:
                     try:
-                        pdf_output = create_pdf(filtered, sheet_name)
-                        st.download_button("📥 PDF Report", pdf_output, f"report_{st.session_state.user_id}.pdf", "application/pdf")
+                        pdf_data = create_pdf(filtered, sheet_name)
+                        st.download_button("📥 Download PDF", pdf_data, f"report_{st.session_state.user_id}.pdf", "application/pdf")
                     except Exception as e:
                         st.error(f"Error PDF: {e}")
-                with col2:
+                with c2:
                     try:
-                        excel_bytes = to_excel(filtered)
-                        st.download_button("📥 Excel Report", excel_bytes, f"report_{st.session_state.user_id}.xlsx")
+                        excel_data = to_excel(filtered)
+                        st.download_button("📥 Download Excel", excel_data, f"report_{st.session_state.user_id}.xlsx")
                     except Exception as e:
                         st.error(f"Error Excel: {e}")
             else:
                 try:
-                    excel_bytes = to_excel(filtered)
-                    st.download_button("📥 Download Excel", excel_bytes, f"data_{sheet_name}.xlsx", use_container_width=True)
+                    excel_data = to_excel(filtered)
+                    st.download_button("📥 Download Excel", excel_data, f"data_{sheet_name}.xlsx", use_container_width=True)
                 except Exception as e:
                     st.error(f"Error Excel: {e}")
         else:
