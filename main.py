@@ -58,7 +58,7 @@ def get_data_from_sheet(sheet_name):
     return pd.DataFrame()
 
 
-# ===== PDF ลายตั้ง =====
+# ===== PDF ลายตั้ง (ไม่มีหัว + ไม่มีสี + มีลายน้ำ) =====
 def create_pdf(df, sheet_name):
     buffer = BytesIO()
 
@@ -94,13 +94,8 @@ def create_pdf(df, sheet_name):
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     elements = []
 
-    # Header
-    elements.append(Paragraph("รายงานข้อมูลสมาชิก", styles["Title"]))
-    elements.append(Spacer(1, 10))
-    elements.append(Paragraph(f"ประเภทข้อมูล: {sheet_name}", styles["Normal"]))
-    elements.append(Spacer(1, 15))
+    # ❌ ไม่มีหัวกระดาษ
 
-    # ลายตั้ง
     if not df.empty:
         for _, row in df.iterrows():
             block_data = []
@@ -110,15 +105,12 @@ def create_pdf(df, sheet_name):
 
             table = Table(block_data, colWidths=[120, 250])
 
+            # ✅ ขาว-ดำล้วน
             table.setStyle(TableStyle([
                 ('FONTNAME', (0, 0), (-1, -1), font_name),
                 ('FONTSIZE', (0, 0), (-1, -1), 14),
 
-                ('BACKGROUND', (0, 0), (-1, -1), colors.whitesmoke),
-
-                ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
-
-                ('BACKGROUND', (0, 0), (0, -1), colors.HexColor("#D9E1F2")),
+                ('GRID', (0, 0), (-1, -1), 0.25, colors.black),
 
                 ('ALIGN', (0, 0), (0, -1), 'LEFT'),
                 ('ALIGN', (1, 0), (1, -1), 'LEFT'),
@@ -130,7 +122,7 @@ def create_pdf(df, sheet_name):
             # เส้นคั่น
             line = Table([[""]], colWidths=[450])
             line.setStyle(TableStyle([
-                ('LINEABOVE', (0, 0), (-1, -1), 1, colors.grey)
+                ('LINEABOVE', (0, 0), (-1, -1), 1, colors.black)
             ]))
             elements.append(line)
             elements.append(Spacer(1, 15))
@@ -138,7 +130,7 @@ def create_pdf(df, sheet_name):
     doc.build(elements, onFirstPage=add_watermark, onLaterPages=add_watermark)
 
     return buffer.getvalue()
-# =================================
+# =======================================================
 
 
 # Excel
