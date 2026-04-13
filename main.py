@@ -57,7 +57,7 @@ def get_data_from_sheet(sheet_name):
     return pd.DataFrame()
 
 
-# ===== PDF ลายตั้ง (กรอบเดียว ไม่มีเส้นใน) =====
+# ===== PDF =====
 def create_pdf(df, sheet_name):
     buffer = BytesIO()
 
@@ -68,17 +68,18 @@ def create_pdf(df, sheet_name):
     except:
         font_name = 'Helvetica'
 
-    # ลายน้ำ
+    # ลายน้ำ (อยู่ด้านบน)
     def add_watermark(c: canvas.Canvas, doc):
         try:
             c.saveState()
-            c.setFillAlpha(0.1)
-            width, height = A4
+            c.setFillAlpha(0.05)
 
+            width, height = A4
             img_width = 140 * mm
             img_height = 140 * mm
+
             x = (width - img_width) / 2
-            y = (height - img_height) / 2
+            y = height - img_height - 30   # 👈 ด้านบน
 
             c.drawImage(WATERMARK_FILE, x, y,
                         width=img_width,
@@ -94,19 +95,22 @@ def create_pdf(df, sheet_name):
     if not df.empty:
         for _, row in df.iterrows():
 
-            # ข้อมูลลายตั้ง
             block_data = []
             for col in df.columns:
                 block_data.append([col, str(row[col])])
 
             table = Table(block_data, colWidths=[120, 250])
 
-            # ไม่มีเส้นภายใน
+            # ไม่มีเส้นภายใน + ฟอนต์ใหญ่
             table.setStyle(TableStyle([
                 ('FONTNAME', (0, 0), (-1, -1), font_name),
-                ('FONTSIZE', (0, 0), (-1, -1), 14),
+                ('FONTSIZE', (0, 0), (-1, -1), 18),  # 👈 ขนาดใหญ่
+
                 ('ALIGN', (0, 0), (0, -1), 'LEFT'),
                 ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
             ]))
 
             # กรอบใหญ่
@@ -125,7 +129,7 @@ def create_pdf(df, sheet_name):
     doc.build(elements, onFirstPage=add_watermark, onLaterPages=add_watermark)
 
     return buffer.getvalue()
-# =======================================================
+# =================================
 
 
 # Excel
