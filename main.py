@@ -35,7 +35,7 @@ def get_data(sheet_name):
     return pd.DataFrame()
 
 # --- สร้าง PDF รองรับภาษาไทย ---
-def create_pdf(df, user_id):
+def create_pdf(df, user_id, sheet_name):
     pdf = FPDF()
     pdf.add_page()
     try:
@@ -44,28 +44,31 @@ def create_pdf(df, user_id):
     except:
         pdf.set_font("Arial", size=14)
 
-    pdf.cell(0, 10, f"รายงานข้อมูล User: {user_id}", ln=True, align='C')
+    pdf.cell(0, 10, f"รายงานข้อมูล ({sheet_name}) - User: {user_id}", ln=True, align='C')
     pdf.ln(5)
     
     # วาดตาราง
     pdf.set_font('THSarabun', '', 12)
-    # คำนวณความกว้างคอลัมน์อัตโนมัติ
-    col_width = 190 / len(df.columns) if len(df.columns) > 0 else 38
-    
-    for col in df.columns:
-        pdf.cell(col_width, 10, str(col), border=1, align='C')
-    pdf.ln()
-    
-    for _, row in df.iterrows():
-        for item in row:
-            pdf.cell(col_width, 10, str(item), border=1)
+    if not df.empty:
+        col_width = 190 / len(df.columns)
+        
+        # หัวตาราง
+        for col in df.columns:
+            pdf.cell(col_width, 10, str(col), border=1, align='C')
         pdf.ln()
         
-    return pdf.output(dest='S').encode('latin-1')
+        # ข้อมูล
+        for _, row in df.iterrows():
+            for item in row:
+                pdf.cell(col_width, 10, str(item), border=1)
+            pdf.ln()
+        
+    return pdf.output(dest='S')
 
 # --- ฟังก์ชันแปลงข้อมูลเป็น Excel ---
 def to_excel(df):
     output = BytesIO()
+    # ต้องติดตั้ง pip install xlsxwriter
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Sheet1')
     return output.getvalue()
@@ -101,38 +104,50 @@ else:
     def show_page(name):
         st.subheader(f"📄 ข้อมูลจาก {name}")
         df = get_data(name)
+        
         if not df.empty and 'user' in df.columns:
             filtered = df[df['user'].astype(str) == st.session_state.user_id]
+            
             if not filtered.empty:
                 st.dataframe(filtered)
                 
-                # ส่วนการ Export ข้อมูล
-                col1, col2 = st.columns(2)
+                # --- ส่วนปุ่ม Download ---
+                st.write("---")
+                c1, c2 = st.columns(2)
                 
-                with col1:
-                    # ปุ่มดาวน์โหลด PDF
-                    if st.button(f"Download PDF ({name})"):
-                        pdf_bytes = create_pdf(filtered, st.session_state.user_id)
-                        b64 = base64.b64encode(pdf_bytes).decode()
-                        href = f'<a href="data:application/pdf;base64,{b64}" download="report_{name}.pdf" style="background:#F63366;color:white;padding:10px;border-radius:5px;text-decoration:none;display:inline-block;">คลิกเพื่อดาวน์โหลด PDF</a>'
+                with c1:
+                    # PDF Download
+                    try:
+                        pdf_data = create_pdf(filtered, st.session_state.user_id, name)
+                        b64 = base64.b64encode(pdf_data).decode()
+                        href = f'<a href="data:application/pdf;base64,{b64}" download="report_{name}.pdf" style="text-decoration:none;"><button style="background-color:#FF4B4B; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer;">📥 Download PDF</button></a>'
                         st.markdown(href, unsafe_allow_html=True)
+                    except Exception as e:
+                        st.error(f"ไม่สามารถสร้าง PDF ได้: {e}")
 
-                with col2:
-                    # ปุ่มดาวน์โหลด Excel
-                    excel_data = to_excel(filtered)
-                    st.download_button(
-                        label="Download Excel",
-                        data=excel_data,
-                        file_name=f"report_{name}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+                with c2:
+                    # Excel Download
+                    try:
+                        excel_data = to_excel(filtered)
+                        st.download_button(
+                            label="📥 Download Excel",
+                            data=excel_data,
+                            file_name=f"report_{name}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                    except Exception as e:
+                        st.error(f"ไม่สามารถสร้าง Excel ได้: {e}")
             else:
-                st.info("ไม่มีข้อมูลของคุณ")
+                st.info("ไม่มีข้อมูลของคุณในระบบ")
         else:
-            st.warning("ไม่พบข้อมูลหรือโครงสร้างตารางไม่ถูกต้อง")
+            st.warning(f"ไม่พบคอลัมน์ 'user' ในแผ่นงาน {name}")
 
-    # เรียกใช้งานตามเมนู
-    if menu == "ข้อมูลสรุป": show_page("data")
-    elif menu == "เงินออม": show_page("data1")
-    elif menu == "เงินกู้ยืม": show_page("data2")
-    elif menu == "หลักทรัพย์ค้ำประกัน": show_page("data3")
+    # แสดงเนื้อหาตามเมนูที่เลือก
+    if menu == "ข้อมูลสรุป": 
+        show_page("data")
+    elif menu == "เงินออม": 
+        show_page("data1")
+    elif menu == "เงินกู้ยืม": 
+        show_page("data2")
+    elif menu == "หลักทรัพย์ค้ำประกัน": 
+        show_page("data3")
