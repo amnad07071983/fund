@@ -72,7 +72,7 @@ def create_pdf(df, sheet_name):
     def add_watermark(c: canvas.Canvas, doc):
         try:
             c.saveState()
-            c.setFillAlpha(0.3)
+            c.setFillAlpha(0.1)
 
             width, height = A4
 
