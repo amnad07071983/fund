@@ -172,7 +172,7 @@ if not st.session_state.logged_in:
             else:
                 st.error("ไม่สามารถเชื่อมต่อฐานข้อมูลผู้ใช้ได้")
 else:
-    st.sidebar.write(f"สวัสดีคุณ: **{st.session_state.user_id}**")
+    st.sidebar.write(f"รหัสผู้ใช้งาน: **{st.session_state.user_id}**")
     menu = st.sidebar.radio("เมนู", ["ข้อมูลสรุป", "เงินออม", "เงินกู้ยืม", "หลักทรัพย์ค้ำประกัน"])
     
     if st.sidebar.button("ออกจากระบบ"):
