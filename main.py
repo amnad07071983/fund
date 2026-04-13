@@ -50,31 +50,32 @@ def create_pdf(df, sheet_name):
     pdf = FPDF()
     pdf.add_page()
     
-    # --- 1. ใส่รูปลายน้ำ (จาง 40%) ---
+    # --- 1. ส่วนของลายน้ำ (Watermark) ---
     if os.path.exists(LOGO_FILE):
         try:
-            img_w = 160
+            img_w = 160  # กำหนดขนาดรูปขนาดใหญ่
+            # คำนวณกึ่งกลางหน้า A4 (กว้าง 210 มม. สูง 297 มม.)
             x_pos = (210 - img_w) / 2
-            y_pos = (297 - img_w) / 2
-            # ตั้งค่าความโปร่งใส 0.4 = 40%
-            pdf.set_alpha(0.4)
+            y_pos = (297 - img_w) / 2 
+            
+            pdf.set_alpha(0.4) # ตั้งค่าลายน้ำจาง 40%
             pdf.image(LOGO_FILE, x=x_pos, y=y_pos, w=img_w)
-            pdf.set_alpha(1.0) # คืนค่าความชัดให้ตัวหนังสือ
-        except:
-            pass
+            pdf.set_alpha(1.0) # คืนค่าความชัดปกติให้ตัวหนังสือ
+        except Exception as e:
+            print(f"Watermark Error: {e}")
 
-    # --- 2. ตั้งค่าฟอนต์ ---
+    # --- 2. การตั้งค่าฟอนต์ ---
     try:
         pdf.add_font('THSarabun', '', FONT_FILE, uni=True)
         pdf.set_font('THSarabun', '', 14)
     except:
         pdf.set_font("Arial", size=12)
 
-    # --- 3. สร้างกรอบและข้อมูล (หน้า data) ---
+    # --- 3. การสร้างข้อมูลในกรอบ (หน้า data) ---
     if not df.empty and sheet_name == "data":
-        # คำนวณความสูงกรอบ
+        # คำนวณความสูงกรอบตามจำนวนคอลัมน์
         frame_height = (len(df.columns) * 10) + 10
-        pdf.rect(10, 10, 190, frame_height)
+        pdf.rect(10, 10, 190, frame_height) # วาดกรอบสี่เหลี่ยมอันเดียวคลุมทั้งหมด
         
         pdf.set_y(15)
         for _, row in df.iterrows():
@@ -84,17 +85,16 @@ def create_pdf(df, sheet_name):
                 pdf.cell(115, 10, str(row[col]), border=0, align='L')
                 pdf.ln(10)
     
-    # แก้ไขปัญหา Invalid binary data โดยส่งออกแบบ bytes
+    # ส่งค่ากลับเป็น bytes เพื่อรองรับ download_button
     return bytes(pdf.output())
 
 def to_excel(df):
     output = BytesIO()
-    # ระบุ engine เป็น xlsxwriter
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Sheet1')
     return output.getvalue()
 
-# --- UI LOGIC ---
+# --- ระบบแสดงผลหลัก ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
@@ -113,10 +113,10 @@ if not st.session_state.logged_in:
                     st.session_state.user_id = str(u)
                     st.rerun()
                 else:
-                    st.error("Username หรือ Password ไม่ถูกต้อง")
+                    st.error("ข้อมูลไม่ถูกต้อง")
 else:
-    st.sidebar.success(f"User: {st.session_state.user_id}")
-    menu = st.sidebar.radio("เมนู", ["ข้อมูลสรุป", "เงินออม", "เงินกู้ยืม", "หลักทรัพย์ค้ำประกัน"])
+    st.sidebar.success(f"สวัสดี: {st.session_state.user_id}")
+    menu = st.sidebar.radio("เลือกรายการ", ["ข้อมูลสรุป", "เงินออม", "เงินกู้ยืม", "หลักทรัพย์ค้ำประกัน"])
     
     if st.sidebar.button("ออกจากระบบ"):
         st.session_state.logged_in = False
@@ -156,4 +156,4 @@ else:
                 except Exception as e:
                     st.error(f"Error Excel: {e}")
         else:
-            st.info("ไม่พบข้อมูลของคุณ")
+            st.info("ไม่มีข้อมูลของคุณในระบบ")
