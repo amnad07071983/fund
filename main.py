@@ -68,7 +68,7 @@ def create_pdf(df, sheet_name):
     except:
         font_name = 'Helvetica'
 
-    # ลายน้ำ (อยู่ด้านบน)
+    # ลายน้ำ (กึ่งกลาง)
     def add_watermark(c: canvas.Canvas, doc):
         try:
             c.saveState()
@@ -79,7 +79,7 @@ def create_pdf(df, sheet_name):
             img_height = 140 * mm
 
             x = (width - img_width) / 2
-            y = height - img_height - 30   # 👈 ด้านบน
+            y = (height - img_height) / 2   # 👈 กึ่งกลาง
 
             c.drawImage(WATERMARK_FILE, x, y,
                         width=img_width,
@@ -101,10 +101,10 @@ def create_pdf(df, sheet_name):
 
             table = Table(block_data, colWidths=[120, 250])
 
-            # ไม่มีเส้นภายใน + ฟอนต์ใหญ่
+            # ไม่มีเส้น + ฟอนต์ใหญ่
             table.setStyle(TableStyle([
                 ('FONTNAME', (0, 0), (-1, -1), font_name),
-                ('FONTSIZE', (0, 0), (-1, -1), 18),  # 👈 ขนาดใหญ่
+                ('FONTSIZE', (0, 0), (-1, -1), 18),
 
                 ('ALIGN', (0, 0), (0, -1), 'LEFT'),
                 ('ALIGN', (1, 0), (1, -1), 'LEFT'),
@@ -113,17 +113,7 @@ def create_pdf(df, sheet_name):
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
             ]))
 
-            # กรอบใหญ่
-            outer = Table([[table]], colWidths=[450])
-            outer.setStyle(TableStyle([
-                ('BOX', (0, 0), (-1, -1), 1.5, colors.black),
-                ('LEFTPADDING', (0, 0), (-1, -1), 10),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 10),
-                ('TOPPADDING', (0, 0), (-1, -1), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-            ]))
-
-            elements.append(outer)
+            elements.append(table)
             elements.append(Spacer(1, 20))
 
     doc.build(elements, onFirstPage=add_watermark, onLaterPages=add_watermark)
