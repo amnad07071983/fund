@@ -4,15 +4,16 @@ from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
 from io import BytesIO
 
-# ===== เพิ่ม reportlab =====
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+# ===== reportlab =====
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-# ==========================
+# =====================
 
 # ================= CONFIGURATION =================
 SHEET_ID = "1Geh6DEbnkdDAgTQx_G4wu4cEjchO5EPwLcNCheSICNY"
@@ -57,26 +58,28 @@ def get_data_from_sheet(sheet_name):
     return pd.DataFrame()
 
 
-# ====== สร้าง PDF (เปลี่ยนเป็น ReportLab + ลายน้ำโปร่งใส) ======
+# ===== PDF ลายตั้ง =====
 def create_pdf(df, sheet_name):
     buffer = BytesIO()
 
-    # โหลดฟอนต์ไทย
+    # ฟอนต์ไทย
     try:
         pdfmetrics.registerFont(TTFont('THSarabun', FONT_FILE))
         font_name = 'THSarabun'
     except:
         font_name = 'Helvetica'
 
-    # ฟังก์ชันลายน้ำ
+    styles = getSampleStyleSheet()
+
+    # ลายน้ำ
     def add_watermark(c: canvas.Canvas, doc):
         try:
             c.saveState()
             c.setFillAlpha(0.05)  # 👈 ปรับความจางตรงนี้
             width, height = A4
 
-            img_width = 120 * mm
-            img_height = 120 * mm
+            img_width = 140 * mm
+            img_height = 140 * mm
             x = (width - img_width) / 2
             y = (height - img_height) / 2
 
@@ -89,23 +92,56 @@ def create_pdf(df, sheet_name):
             pass
 
     doc = SimpleDocTemplate(buffer, pagesize=A4)
-    styles = getSampleStyleSheet()
-    story = []
+    elements = []
 
+    # Header
+    elements.append(Paragraph("รายงานข้อมูลสมาชิก", styles["Title"]))
+    elements.append(Spacer(1, 10))
+    elements.append(Paragraph(f"ประเภทข้อมูล: {sheet_name}", styles["Normal"]))
+    elements.append(Spacer(1, 15))
+
+    # ลายตั้ง
     if not df.empty:
         for _, row in df.iterrows():
-            for col in df.columns:
-                text = f"{col} : {row[col]}"
-                story.append(Paragraph(text, styles["Normal"]))
-                story.append(Spacer(1, 8))
+            block_data = []
 
-    doc.build(story, onFirstPage=add_watermark, onLaterPages=add_watermark)
+            for col in df.columns:
+                block_data.append([col, str(row[col])])
+
+            table = Table(block_data, colWidths=[120, 250])
+
+            table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (-1, -1), font_name),
+                ('FONTSIZE', (0, 0), (-1, -1), 14),
+
+                ('BACKGROUND', (0, 0), (-1, -1), colors.whitesmoke),
+
+                ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
+
+                ('BACKGROUND', (0, 0), (0, -1), colors.HexColor("#D9E1F2")),
+
+                ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+            ]))
+
+            elements.append(table)
+            elements.append(Spacer(1, 15))
+
+            # เส้นคั่น
+            line = Table([[""]], colWidths=[450])
+            line.setStyle(TableStyle([
+                ('LINEABOVE', (0, 0), (-1, -1), 1, colors.grey)
+            ]))
+            elements.append(line)
+            elements.append(Spacer(1, 15))
+
+    doc.build(elements, onFirstPage=add_watermark, onLaterPages=add_watermark)
 
     return buffer.getvalue()
-# ===============================================================
+# =================================
 
 
-# สร้างไฟล์ Excel
+# Excel
 def to_excel(df):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -113,7 +149,7 @@ def to_excel(df):
     return output.getvalue()
 
 
-# --- Main Logic ---
+# --- Main ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
@@ -159,16 +195,13 @@ else:
             if sheet_name == "data":
                 col1, col2 = st.columns(2)
                 with col1:
-                    try:
-                        pdf_data = create_pdf(filtered, sheet_name)
-                        st.download_button(
-                            label="📥 PDF Report",
-                            data=pdf_data,
-                            file_name=f"report_{st.session_state.user_id}.pdf",
-                            mime="application/pdf"
-                        )
-                    except Exception as e:
-                        st.error(f"ไม่สามารถสร้าง PDF ได้: {e}")
+                    pdf_data = create_pdf(filtered, sheet_name)
+                    st.download_button(
+                        label="📥 PDF Report",
+                        data=pdf_data,
+                        file_name=f"report_{st.session_state.user_id}.pdf",
+                        mime="application/pdf"
+                    )
                 with col2:
                     excel_data = to_excel(filtered)
                     st.download_button(
