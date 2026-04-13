@@ -75,7 +75,7 @@ def create_pdf(df, sheet_name):
     def add_watermark(c: canvas.Canvas, doc):
         try:
             c.saveState()
-            c.setFillAlpha(0.05)  # 👈 ปรับความจางตรงนี้
+            c.setFillAlpha(0.1)  # 👈 ปรับความจางตรงนี้
             width, height = A4
 
             img_width = 140 * mm
