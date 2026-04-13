@@ -8,8 +8,41 @@ from io import BytesIO
 # ================= CONFIGURATION =================
 SHEET_ID = "1Geh6DEbnkdDAgTQx_G4wu4cEjchO5EPwLcNCheSICNY"
 FONT_FILE = "THSARABUN BOLD.ttf" 
-WATERMARK_FILE = "p1.png"  # ไฟล์รูปลายน้ำ
+WATERMARK_FILE = "p1.png"
 # =================================================
+
+
+# ====== เพิ่มคลาส PDF สำหรับลายน้ำ ======
+class PDF(FPDF):
+    def header(self):
+        try:
+            self.set_alpha(0.1)  # ปรับความจางตรงนี้
+            self.image(WATERMARK_FILE, x=30, y=60, w=150)
+            self.set_alpha(1)
+        except:
+            pass
+
+    def set_alpha(self, alpha, bm='Normal'):
+        self._out(f'/GS{int(alpha*100)} gs')
+
+    def _putextgstates(self):
+        self._out('/ExtGState <<')
+        for i in range(1, 101):
+            self._out(f'/GS{i} << /ca {i/100} /CA {i/100} >>')
+        self._out('>>')
+
+    def _putresources(self):
+        super()._putresources()
+        self._putextgstates()
+
+    def _putresourcedict(self):
+        super()._putresourcedict()
+        self._out('/ExtGState <<')
+        for i in range(1, 101):
+            self._out(f'/GS{i} {i} 0 R')
+        self._out('>>')
+# ========================================
+
 
 # เชื่อมต่อ Google Sheets
 @st.cache_resource
@@ -23,6 +56,7 @@ def init_connection():
     except Exception as e:
         st.error(f"การเชื่อมต่อผิดพลาด: {e}")
         return None
+
 
 # ดึงข้อมูลจาก Sheet
 @st.cache_data(ttl=600)
@@ -45,19 +79,11 @@ def get_data_from_sheet(sheet_name):
             st.error(f"Error {sheet_name}: {e}")
     return pd.DataFrame()
 
-# สร้างไฟล์ PDF พร้อมรูปลายน้ำ
+
+# สร้างไฟล์ PDF (แก้ไขให้มีลายน้ำแล้ว)
 def create_pdf(df, sheet_name):
-    pdf = FPDF()
+    pdf = PDF()
     pdf.add_page()
-    
-    # --- ส่วนการเพิ่มรูปลายน้ำ (เพิ่มใหม่) ---
-    try:
-        # วางรูป p1.png ไว้ตรงกลาง (x=55, y=80, กว้าง=100) ปรับค่าได้ตามต้องการ
-        # แนะนำให้ใช้รูปที่มีความโปร่งใส (Transparent PNG) เพื่อความสวยงาม
-        pdf.image(WATERMARK_FILE, x=55, y=80, w=100) 
-    except Exception as e:
-        pass # ถ้าไม่มีไฟล์รูปให้ข้ามไปทำงานส่วนอื่นต่อ
-    # -----------------------------------
 
     try:
         pdf.add_font('THSarabun', '', FONT_FILE)
@@ -80,9 +106,10 @@ def create_pdf(df, sheet_name):
                 pdf.cell(60, 10, f"{col_name} : ", border=0)
                 pdf.cell(115, 10, val_data, border=0, align='L')
                 pdf.ln(10)
-    
+
     output = pdf.output()
     return bytes(output) if isinstance(output, bytearray) else output
+
 
 # สร้างไฟล์ Excel
 def to_excel(df):
@@ -90,6 +117,7 @@ def to_excel(df):
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Sheet1')
     return output.getvalue()
+
 
 # --- Main Logic ---
 if 'logged_in' not in st.session_state:
