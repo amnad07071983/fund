@@ -5,11 +5,10 @@ import pandas as pd
 from io import BytesIO
 
 # ===== reportlab =====
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -58,7 +57,7 @@ def get_data_from_sheet(sheet_name):
     return pd.DataFrame()
 
 
-# ===== PDF ลายตั้ง (ไม่มีหัว + ไม่มีสี + มีลายน้ำ) =====
+# ===== PDF ลายตั้ง (กรอบเดียว ไม่มีเส้นใน) =====
 def create_pdf(df, sheet_name):
     buffer = BytesIO()
 
@@ -69,13 +68,11 @@ def create_pdf(df, sheet_name):
     except:
         font_name = 'Helvetica'
 
-    styles = getSampleStyleSheet()
-
     # ลายน้ำ
     def add_watermark(c: canvas.Canvas, doc):
         try:
             c.saveState()
-            c.setFillAlpha(0.1)  # 👈 ปรับความจางตรงนี้
+            c.setFillAlpha(0.1)
             width, height = A4
 
             img_width = 140 * mm
@@ -94,38 +91,36 @@ def create_pdf(df, sheet_name):
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     elements = []
 
-    # ❌ ไม่มีหัวกระดาษ
-
     if not df.empty:
         for _, row in df.iterrows():
-            block_data = []
 
+            # ข้อมูลลายตั้ง
+            block_data = []
             for col in df.columns:
                 block_data.append([col, str(row[col])])
 
             table = Table(block_data, colWidths=[120, 250])
 
-            # ✅ ขาว-ดำล้วน
+            # ไม่มีเส้นภายใน
             table.setStyle(TableStyle([
                 ('FONTNAME', (0, 0), (-1, -1), font_name),
                 ('FONTSIZE', (0, 0), (-1, -1), 14),
-
-                ('GRID', (0, 0), (-1, -1), 0.25, colors.black),
-
                 ('ALIGN', (0, 0), (0, -1), 'LEFT'),
                 ('ALIGN', (1, 0), (1, -1), 'LEFT'),
             ]))
 
-            elements.append(table)
-            elements.append(Spacer(1, 15))
-
-            # เส้นคั่น
-            line = Table([[""]], colWidths=[450])
-            line.setStyle(TableStyle([
-                ('LINEABOVE', (0, 0), (-1, -1), 1, colors.black)
+            # กรอบใหญ่
+            outer = Table([[table]], colWidths=[450])
+            outer.setStyle(TableStyle([
+                ('BOX', (0, 0), (-1, -1), 1.5, colors.black),
+                ('LEFTPADDING', (0, 0), (-1, -1), 10),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (-1, -1), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
             ]))
-            elements.append(line)
-            elements.append(Spacer(1, 15))
+
+            elements.append(outer)
+            elements.append(Spacer(1, 20))
 
     doc.build(elements, onFirstPage=add_watermark, onLaterPages=add_watermark)
 
